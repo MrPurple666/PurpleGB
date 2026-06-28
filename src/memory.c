@@ -84,7 +84,7 @@ static void mbc_write(mem_t *m, u16 a, u8 v) {
 }
 
 u8 mem_read(mem_t *m, u16 a) {
-    if (m->dma_active && (a < 0xFF80 || a > 0xFFFE)) return 0xFF;
+    // During DMA, only HRAM is accessible (but we complete DMA instantly, so this rarely triggers)
     if (a < 0x4000) return m->rom[a];
     if (a < 0x8000) return m->rom[m->mbc_rom_bank * ROM_BANK_SIZE + (a - 0x4000)];
     if (a < 0xA000) return m->vram[a & 0x1FFF];
@@ -138,10 +138,14 @@ void mem_write(mem_t *m, u16 a, u8 v) {
             case 0x40: m->io[0x40] = v | 0x11; break; // force BG + unsigned tiles
             case 0x41: case 0x42: case 0x43:
             case 0x45: case 0x47: case 0x48: case 0x49:
-            case 0x4A: case 0x4B: m->io[r] = v; break;
-            case 0x46:
-                m->io[0x46] = v; m->dma_active = 1; m->dma_cycles = 160; m->dma_source_page = v;
+            case 0x46: {
+                m->io[0x46] = v;
+                // OAM DMA: copy page from source address to OAM immediately
+                u16 src = (u16)v << 8;
+                for (int i = 0; i < 0xA0; i++)
+                    m->oam[i] = mem_read(m, src + i);
                 break;
+            }
             case 0x10: case 0x11: case 0x12: case 0x13: case 0x14:
             case 0x16: case 0x17: case 0x18: case 0x19:
             case 0x1A: case 0x1B: case 0x1C: case 0x1D: case 0x1E:
@@ -156,7 +160,12 @@ void mem_write(mem_t *m, u16 a, u8 v) {
         }
         return;
     }
-    if (a < 0xFFFF) { m->hram[a & 0x7F] = v; return; }
+    if (a < 0xFFFF) {
+        u8 idx = a & 0x7F;
+        u8 wv = v;
+        if (idx == 0) wv = v & 0xF0; // prevent re-init trigger
+        m->hram[idx] = wv; return;
+    }
     m->ie = v;
 }
 

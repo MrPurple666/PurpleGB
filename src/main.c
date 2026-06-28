@@ -42,7 +42,6 @@ static void tq(void*u,SDL_TrayEntry*e){(void)e;((gb_t*)u)->quit=1;}
 int main(int argc,char**argv){
     gb_t gb={0};
     cpu_init_opcodes();re(&gb);gb.mem.joypad=&gb.joypad;gb.mem.timer=&gb.timer;
-    gb.mem.hram[0x36]=0xC9; // RET at $FFB6 for CALL $FFB6
     if(!SDL_Init(SDL_INIT_VIDEO|SDL_INIT_AUDIO))return 1;
     gb.w=SDL_CreateWindow("PurpleGB",480,432,SDL_WINDOW_RESIZABLE);
     if(!gb.w){SDL_Quit();return 1;}
@@ -50,10 +49,6 @@ int main(int argc,char**argv){
     if(!gb.r){SDL_DestroyWindow(gb.w);SDL_Quit();return 1;}
     gb.t=SDL_CreateTexture(gb.r,SDL_PIXELFORMAT_ARGB8888,SDL_TEXTUREACCESS_STREAMING,160,144);
     if(!gb.t){SDL_DestroyRenderer(gb.r);SDL_DestroyWindow(gb.w);SDL_Quit();return 1;}
-
-    for(int i=0;i<160*144;i++)gb.ppu.framebuffer[i]=0xFFFF00FF;
-    SDL_UpdateTexture(gb.t,NULL,gb.ppu.framebuffer,160*4);
-    SDL_RenderTexture(gb.r,gb.t,NULL,NULL);SDL_RenderPresent(gb.r);
 
     SDL_Surface*ts=SDL_CreateSurface(16,16,SDL_PIXELFORMAT_INDEX8);
     if(ts){SDL_FillSurfaceRect(ts,NULL,0xFF00AAFF);gb.tray=SDL_CreateTray(ts,"PurpleGB");
