@@ -38,16 +38,26 @@ static const u8 boot_vram[384] = {
 
 void decode_logo(mem_t *m) {
     if (!m->rom) return;
-    // Copy logo tiles to VRAM at $8010 (tiles 1-12, 384 bytes)
-    // But the boot ROM writes with stride: val, skip, val, skip
-    // Our precomputed data already has this pattern
-    for (int i = 0; i < 384; i++) {
+
+    for (int i = 0; i < 384; i++)
         m->vram[0x10 + i] = boot_vram[i];
+
+    for (int i = 0; i < 0x400; i++) {
+        m->vram[0x1800 + i] = 0x00; // BG map at $9800
+        m->vram[0x1C00 + i] = 0x00; // BG map at $9C00
     }
-    // Fill tile 47 ($2F) so the game's tile map ($2F entries) is visible
-    for (int i = 0; i < 16; i++) {
-        m->vram[0x2F0 + i] = 0xFF;
+
+    for (int i = 0; i < 12; i++) {
+        m->vram[0x1904 + i] = (u8)(1 + i);
+        m->vram[0x1924 + i] = (u8)(13 + i);
     }
+    m->vram[0x1910] = 0x19; // trademark tile
+
+    m->io[0x40] = 0x91; // LCD on, BG on, $8000 tile data, $9800 map
+    m->io[0x42] = 0x00; // SCY
+    m->io[0x43] = 0x00; // SCX
+    m->io[0x44] = 0x00; // LY
+    m->io[0x47] = 0xFC; // DMG palette
 }
 
 void mem_init(mem_t *m) {

@@ -189,6 +189,12 @@ void render_scanline(ppu_t *ppu, mem_t *mem, int ly)
     for (int x = 0; x < LCD_WIDTH; x++)
         ppu->framebuffer[ly * LCD_WIDTH + x] = dmg_colors[ppu->line_buf[x]];
 }
+void ppu_render_frame(ppu_t *ppu, mem_t *mem)
+{
+    ppu->window_line = 0;
+    for (int y = 0; y < LCD_HEIGHT; y++)
+        render_scanline(ppu, mem, y);
+}
 
 // Update LY-LYC coincidence and STAT interrupt
 static void update_stat(ppu_t *ppu, mem_t *mem)
