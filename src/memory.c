@@ -196,7 +196,16 @@ void mem_write(mem_t *mem, u16 addr, u8 val)
     if (addr < 0xFF80) {
         u8 reg = addr & 0x7F;
         switch (reg) {
-            case 0x00: mem->io[0x00] = (mem->io[0x00] & 0x30) | (val & 0x30); break;
+            case 0x00: {
+                u8 sel = val & 0x30;
+                mem->io[0x00] = sel;
+                if (mem->joypad) {
+                    joypad_t *jp = (joypad_t *)mem->joypad;
+                    jp->select_buttons = !(sel & 0x20);
+                    jp->select_dpad    = !(sel & 0x10);
+                }
+                break;
+            }
             case 0x01: mem->io[0x01] = val; break;
             case 0x02: mem->io[0x02] = val; break;
             case 0x04: mem->io[0x04] = 0; break;
