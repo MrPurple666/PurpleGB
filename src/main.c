@@ -11,7 +11,6 @@
 #include "ppu.h"
 #include "apu.h"
 
-static const u8 font[96*8] = {0};
 typedef struct {
     mem_t mem; cpu_t cpu; timer_t timer; joypad_t joypad; ppu_t ppu; apu_t apu;
     SDL_Window *w; SDL_Renderer *r; SDL_Texture *t;
@@ -25,6 +24,8 @@ static void re(gb_t*g){mem_init(&g->mem);cpu_init(&g->cpu);timer_init(&g->timer)
 static void lr(gb_t*g,const char*p){
     if(!mem_load_rom(&g->mem,p))return;
     re(g);g->mem.joypad=&g->joypad;g->mem.timer=&g->timer;
+    // Init HRAM: RET at $FFB6 (CALL target in VBlank handler)
+    g->mem.hram[0x36] = 0xC9;
     if(!mem_load_rom(&g->mem,p))return;
     g->rom_loaded=1;
     if(g->as){SDL_DestroyAudioStream(g->as);g->as=NULL;}
@@ -41,6 +42,7 @@ static void tq(void*u,SDL_TrayEntry*e){(void)e;((gb_t*)u)->quit=1;}
 int main(int argc,char**argv){
     gb_t gb={0};
     cpu_init_opcodes();re(&gb);gb.mem.joypad=&gb.joypad;gb.mem.timer=&gb.timer;
+    gb.mem.hram[0x36]=0xC9; // RET at $FFB6 for CALL $FFB6
     if(!SDL_Init(SDL_INIT_VIDEO|SDL_INIT_AUDIO))return 1;
     gb.w=SDL_CreateWindow("PurpleGB",480,432,SDL_WINDOW_RESIZABLE);
     if(!gb.w){SDL_Quit();return 1;}
@@ -61,6 +63,7 @@ int main(int argc,char**argv){
     if(argc>1)lr(&gb,argv[1]);
     else{SDL_DialogFileFilter f={"Game Boy ROMs","gb;gbc"};SDL_ShowOpenFileDialog(rc,&gb,gb.w,&f,1,NULL,0);}
 
+    
     gb.fps_ts=SDL_GetTicks();
     while(!gb.quit){
         u32 fs=SDL_GetTicks();SDL_Event e;
@@ -80,7 +83,10 @@ int main(int argc,char**argv){
         }
         if(!gb.paused&&gb.rom_loaded){
             int tc=0;
-            while(tc<70224){int cy=cpu_step(&gb.cpu,&gb.mem);ppu_tick(&gb.ppu,&gb.mem,cy);timer_tick(&gb.timer,&gb.mem,cy);apu_tick(&gb.apu,cy);mem_dma_tick(&gb.mem,cy);tc+=cy;}
+            while(tc<70224){
+                int cy=cpu_step(&gb.cpu,&gb.mem);
+                ppu_tick(&gb.ppu,&gb.mem,cy);timer_tick(&gb.timer,&gb.mem,cy);apu_tick(&gb.apu,cy);mem_dma_tick(&gb.mem,cy);tc+=cy;
+            }
             int sn=(int)(((u64)70224*SAMPLE_RATE)/T_CYCLES_PER_SEC);if(sn>512)sn=512;
             apu_generate(&gb.apu,gb.abuf,sn);if(gb.as)SDL_PutAudioStreamData(gb.as,gb.abuf,sn*sizeof(s16)*2);
         }
