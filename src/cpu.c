@@ -74,7 +74,7 @@ F op_ldh_i_a(cpu_t*c,mem_t*m){u8 o=mem_read(m,c->pc++);mem_write(m,0xFF00+o,c->a
 F op_ldh_a_i(cpu_t*c,mem_t*m){u8 o=mem_read(m,c->pc++);c->a=mem_read(m,0xFF00+o);}
 F op_ld_i16_a(cpu_t*c,mem_t*m){u16 a=mem_read(m,c->pc)|(u16)mem_read(m,c->pc+1)<<8;c->pc+=2;mem_write(m,a,c->a);}
 F op_ld_a_i16(cpu_t*c,mem_t*m){u16 a=mem_read(m,c->pc)|(u16)mem_read(m,c->pc+1)<<8;c->pc+=2;c->a=mem_read(m,a);}
-F op_jr(cpu_t*c,mem_t*m){c->pc+=(s8)mem_read(m,c->pc++);}
+F op_jr(cpu_t*c,mem_t*m){s8 o=(s8)mem_read(m,c->pc++);c->pc+=o;}
 F op_jr_nz(cpu_t*c,mem_t*m){s8 o=(s8)mem_read(m,c->pc++);if(!cpu_get_z(c))c->pc+=o;}
 F op_jr_z(cpu_t*c,mem_t*m){s8 o=(s8)mem_read(m,c->pc++);if(cpu_get_z(c))c->pc+=o;}
 F op_jr_nc(cpu_t*c,mem_t*m){s8 o=(s8)mem_read(m,c->pc++);if(!cpu_get_c(c))c->pc+=o;}
@@ -109,11 +109,11 @@ F op_add_hl_de(cpu_t*c,mem_t*m){(void)m;u16 h=cpu_hl(c);u32 r=h+cpu_de(c);cpu_se
 F op_add_hl_hl(cpu_t*c,mem_t*m){(void)m;u16 h=cpu_hl(c);u32 r=h+h;cpu_set_n(c,0);cpu_set_h(c,((h&0xFFF)*2)>0xFFF);cpu_set_c(c,r>0xFFFF);cpu_set_hl(c,r);}
 F op_add_hl_sp(cpu_t*c,mem_t*m){(void)m;u16 h=cpu_hl(c);u32 r=h+c->sp;cpu_set_n(c,0);cpu_set_h(c,((h&0xFFF)+(c->sp&0xFFF))>0xFFF);cpu_set_c(c,r>0xFFFF);cpu_set_hl(c,r);}
 
-#define ALU_OP(name,func) F op_##name##_b(cpu_t*c,mem_t*m){func(c,gr(c,m,0));}F op_##name##_c(cpu_t*c,mem_t*m){func(c,gr(c,m,1));}F op_##name##_d(cpu_t*c,mem_t*m){func(c,gr(c,m,2));}F op_##name##_e(cpu_t*c,mem_t*m){func(c,gr(c,m,3));}F op_##name##_h(cpu_t*c,mem_t*m){func(c,gr(c,m,4));}F op_##name##_l(cpu_t*c,mem_t*m){func(c,gr(c,m,5));}F op_##name##_hl(cpu_t*c,mem_t*m){func(c,mem_read(m,cpu_hl(c)));}F op_##name##_a(cpu_t*c,mem_t*m){func(c,c->a);}F op_##name##_i(cpu_t*c,mem_t*m){func(c,mem_read(m,c->pc++));}
+#define ALU_OP(name,func) F op_##name##_b(cpu_t*c,mem_t*m){func(c,gr(c,m,0));}F op_##name##_c(cpu_t*c,mem_t*m){func(c,gr(c,m,1));}F op_##name##_d(cpu_t*c,mem_t*m){func(c,gr(c,m,2));}F op_##name##_e(cpu_t*c,mem_t*m){func(c,gr(c,m,3));}F op_##name##_h(cpu_t*c,mem_t*m){func(c,gr(c,m,4));}F op_##name##_l(cpu_t*c,mem_t*m){func(c,gr(c,m,5));}F op_##name##_hl(cpu_t*c,mem_t*m){func(c,mem_read(m,cpu_hl(c)));}F op_##name##_a(cpu_t*c,mem_t*m){func(c,c->a);}F op_##name##_i(cpu_t*c,mem_t*m){u8 v=mem_read(m,c->pc++);func(c,v);}
 ALU_OP(add,alu_add)ALU_OP(adc,alu_adc)ALU_OP(sub,alu_sub)ALU_OP(sbc,alu_sbc)ALU_OP(and,alu_and)ALU_OP(or,alu_or)ALU_OP(xor,alu_xor)ALU_OP(cp,alu_cp)
 
 F op_ld_rr(cpu_t*c,mem_t*m){u8 o=mem_read(m,c->pc-1);int d=(o>>3)&7,s=o&7;(void)sr(c,m,d,gr(c,m,s));}
-#define LDIM(n,rn) F op_ld_##rn(cpu_t*c,mem_t*m){sr(c,m,n,mem_read(m,c->pc++));}
+#define LDIM(n,rn) F op_ld_##rn(cpu_t*c,mem_t*m){u8 v=mem_read(m,c->pc++);sr(c,m,n,v);}
 LDIM(0,b)LDIM(1,c)LDIM(2,d)LDIM(3,e)LDIM(4,h)LDIM(5,l)LDIM(6,h_)LDIM(7,a)
 
 #define ICD(n) F op_inc_##n(cpu_t*c,mem_t*m){u8 v=n==6?mem_read(m,cpu_hl(c)):gr(c,m,n);u8 r=v+1;if(n==6)mem_write(m,cpu_hl(c),r);else sr(c,m,n,r);cpu_set_z(c,!r);cpu_set_n(c,0);cpu_set_h(c,!(v&0xF));}
