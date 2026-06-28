@@ -49,15 +49,12 @@ int main(int argc,char**argv){
     if(!gb.r){SDL_DestroyWindow(gb.w);SDL_Quit();return 1;}
     gb.t=SDL_CreateTexture(gb.r,SDL_PIXELFORMAT_ARGB8888,SDL_TEXTUREACCESS_STREAMING,160,144);
     if(!gb.t){SDL_DestroyRenderer(gb.r);SDL_DestroyWindow(gb.w);SDL_Quit();return 1;}
-
     SDL_Surface*ts=SDL_CreateSurface(16,16,SDL_PIXELFORMAT_INDEX8);
-    if(ts){SDL_FillSurfaceRect(ts,NULL,0xFF00AAFF);gb.tray=SDL_CreateTray(ts,"PurpleGB");
-        if(gb.tray){SDL_TrayMenu*m=SDL_CreateTrayMenu(gb.tray);SDL_TrayEntry*oe=SDL_InsertTrayEntryAt(m,-1,"Open ROM...",SDL_TRAYENTRY_BUTTON);SDL_SetTrayEntryCallback(oe,to,&gb);SDL_InsertTrayEntryAt(m,-1,NULL,0);SDL_TrayEntry*qe=SDL_InsertTrayEntryAt(m,-1,"Quit",SDL_TRAYENTRY_BUTTON);SDL_SetTrayEntryCallback(qe,tq,&gb);}
-        SDL_DestroySurface(ts);}
 
-    if(argc>1)lr(&gb,argv[1]);
+    if(argc>1){lr(&gb,argv[1]);fprintf(stderr,"ROM loaded=%d title='%s'\\n",gb.rom_loaded,gb.mem.rom_title);}
     else{SDL_DialogFileFilter f={"Game Boy ROMs","gb;gbc"};SDL_ShowOpenFileDialog(rc,&gb,gb.w,&f,1,NULL,0);}
     
+    gb.fps_ts=SDL_GetTicks();
     while(!gb.quit){
         u32 fs=SDL_GetTicks();SDL_Event e;
         while(SDL_PollEvent(&e))switch(e.type){
@@ -91,8 +88,32 @@ int main(int argc,char**argv){
         }
 
         SDL_UpdateTexture(gb.t,NULL,gb.ppu.framebuffer,160*4);
+        SDL_RenderTexture(gb.r,gb.t,NULL,NULL);SDL_RenderPresent(gb.r);
         gb.fc++; u32 nw = SDL_GetTicks();
         if(nw-gb.fps_ts>=1000){char t[128];snprintf(t,sizeof(t),"PurpleGB — %s [%u FPS]",gb.rom_loaded?gb.mem.rom_title:"(no ROM)",gb.fc);SDL_SetWindowTitle(gb.w,t);gb.fps_ts=nw;gb.fc=0;}
+        // DEBUG: per-frame state dump
+        static int dframe = 0;
+        if (dframe < 30) {
+            u8 lcdc = gb.mem.io[0x40];
+            u8 bgp = gb.mem.io[0x47];
+            u8 ly = gb.mem.io[0x44];
+            fprintf(stderr, "FRM %d: LCDC=%02X BGP=%02X LY=%d fc=%u\n",
+                    dframe, lcdc, bgp, ly, gb.fc);
+            if (dframe == 10) {
+                fprintf(stderr, "VRAM@8000:");
+                for (int i = 0; i < 16; i++) fprintf(stderr, " %02X", gb.mem.vram[i]);
+                fprintf(stderr, "\nVRAM@82F0:");  // tile 47
+                fprintf(stderr, "\nVRAM@82F0:");  // tile 47 (unsigned)
+                for (int i = 0; i < 16; i++) fprintf(stderr, " %02X", gb.mem.vram[0x2F0 + i]);
+                fprintf(stderr, "\nVRAM@97F0:");  // tile 47 (signed)
+                for (int i = 0; i < 16; i++) fprintf(stderr, " %02X", gb.mem.vram[0x17F0 + i]);
+                fprintf(stderr, "\nTMAP@9C00:");
+                for (int i = 0; i < 32; i++) fprintf(stderr, " %02X", gb.mem.vram[0x1C00 + i]);
+                fprintf(stderr, "\nBGP=%02X OBP0=%02X OBP1=%02X\n",
+                    gb.mem.io[0x47], gb.mem.io[0x48], gb.mem.io[0x49]);
+            }
+            dframe++;
+        }
         u32 el=SDL_GetTicks()-fs;if(el<16)SDL_Delay(16-el);
     }
     if(gb.as)SDL_DestroyAudioStream(gb.as);if(gb.tray)SDL_DestroyTray(gb.tray);

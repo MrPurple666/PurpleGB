@@ -135,7 +135,7 @@ void mem_write(mem_t *m, u16 a, u8 v) {
             case 0x06: m->io[0x06] = v; break;
             case 0x07: m->io[0x07] = v & 0x07; break;
             case 0x0F: m->io[0x0F] = v & 0x1F; break;
-            case 0x40: m->io[0x40] = v | 0x13; break; // force BG + unsigned tiles
+            case 0x40: m->io[0x40] = v | 0x03; break; // force BG + unsigned tiles
             case 0x41: case 0x42: case 0x43:
             case 0x45: case 0x47: case 0x48: case 0x49:
             case 0x46: {
