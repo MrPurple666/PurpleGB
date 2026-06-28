@@ -7,9 +7,7 @@
 #include "interrupt.h"
 #include "timer.h"
 #include "joypad.h"
-
-#define LCD_WIDTH  160
-#define LCD_HEIGHT 144
+#include "ppu.h"
 
 int main(int argc, char **argv)
 {
@@ -26,20 +24,19 @@ int main(int argc, char **argv)
     if (!renderer) { SDL_DestroyWindow(window); SDL_Quit(); return 1; }
 
     SDL_Texture *texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888,
-                                              SDL_TEXTUREACCESS_STREAMING, LCD_WIDTH, LCD_HEIGHT);
+                                              SDL_TEXTUREACCESS_STREAMING, 160, 144);
     if (!texture) { SDL_DestroyRenderer(renderer); SDL_DestroyWindow(window); SDL_Quit(); return 1; }
 
     mem_t mem;
     cpu_t cpu;
     timer_t timer;
     joypad_t joypad;
+    ppu_t ppu;
     mem_init(&mem);
     cpu_init(&cpu);
     timer_init(&timer);
     joypad_init(&joypad);
-
-    u32 framebuffer[LCD_WIDTH * LCD_HEIGHT];
-    memset(framebuffer, 0xFF, sizeof(framebuffer));
+    ppu_init(&ppu);
 
     bool quit = false;
     while (!quit) {
@@ -51,10 +48,11 @@ int main(int argc, char **argv)
 
         for (int i = 0; i < 1000 && !cpu.halted && !cpu.stopped; i++) {
             int cyc = cpu_step(&cpu, &mem);
+            ppu_tick(&ppu, &mem, cyc);
             timer_tick(&timer, &mem, cyc);
         }
 
-        SDL_UpdateTexture(texture, NULL, framebuffer, LCD_WIDTH * sizeof(u32));
+        SDL_UpdateTexture(texture, NULL, ppu.framebuffer, 160 * sizeof(u32));
         SDL_RenderTexture(renderer, texture, NULL, NULL);
         SDL_RenderPresent(renderer);
         SDL_Delay(16);
