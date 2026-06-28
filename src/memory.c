@@ -95,7 +95,12 @@ u8 mem_read(mem_t *m, u16 a) {
     if (a < 0xFEA0) return m->oam[a & 0xFF];
     if (a < 0xFF00) return 0xFF;
     if (a < 0xFF80) {
-        if (a == 0xFF00 && m->joypad) return joypad_read((joypad_t*)m->joypad);
+        if (a == 0xFF00 && m->joypad) {
+            u8 p1 = joypad_read((joypad_t*)m->joypad);
+            static int pcnt = 0;
+            if (pcnt < 20) { fprintf(stderr, "P1 read: %02X\\n", p1); pcnt++; }
+            return p1;
+        }
         return m->io[a & 0x7F];
     }
     if (a < 0xFFFF) return m->hram[a & 0x7F];

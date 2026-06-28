@@ -57,9 +57,7 @@ int main(int argc,char**argv){
 
     if(argc>1)lr(&gb,argv[1]);
     else{SDL_DialogFileFilter f={"Game Boy ROMs","gb;gbc"};SDL_ShowOpenFileDialog(rc,&gb,gb.w,&f,1,NULL,0);}
-
     
-    gb.fps_ts=SDL_GetTicks();
     while(!gb.quit){
         u32 fs=SDL_GetTicks();SDL_Event e;
         while(SDL_PollEvent(&e))switch(e.type){
@@ -85,6 +83,7 @@ int main(int argc,char**argv){
             int sn=(int)(((u64)70224*SAMPLE_RATE)/T_CYCLES_PER_SEC);if(sn>512)sn=512;
             apu_generate(&gb.apu,gb.abuf,sn);if(gb.as)SDL_PutAudioStreamData(gb.as,gb.abuf,sn*sizeof(s16)*2);
         }
+
         if(gb.paused&&gb.rom_loaded){
             u32*fb=gb.ppu.framebuffer;
             for(int y=0;y<144;y++)for(int x=0;x<160;x++){u32 c=fb[y*160+x];fb[y*160+x]=0xFF000000|((u32)(((c>>16)&0xFF)*0.5f))<<16|((u32)(((c>>8)&0xFF)*0.5f))<<8|(u32)((c&0xFF)*0.5f);}

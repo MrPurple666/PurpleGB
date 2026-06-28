@@ -57,23 +57,20 @@ void joypad_handle_event(joypad_t *joypad, mem_t *mem, SDL_Event *e)
 
 u8 joypad_read(joypad_t *joypad)
 {
-    u8 val = 0xCF; // bits 7-6 = 11, bit 5 = 1 (deselected), bit 4 = 1 (deselected)
-
+    u8 val = 0xCF;
     if (joypad->select_buttons) {
-        val &= ~0x20; // bit 5 = 0 indicates buttons selected
-        if (!joypad->button_a)      val &= ~0x01;
-        if (!joypad->button_b)      val &= ~0x02;
-        if (!joypad->button_select) val &= ~0x04;
-        if (!joypad->button_start)  val &= ~0x08;
+        val &= ~0x20;
+        if (joypad->button_a)      val &= ~0x01;
+        if (joypad->button_b)      val &= ~0x02;
+        if (joypad->button_select) val &= ~0x04;
+        if (joypad->button_start)  val &= ~0x08;
     }
-
     if (joypad->select_dpad) {
-        val &= ~0x10; // bit 4 = 0 indicates dpad selected
-        if (!joypad->right) val &= ~0x01;
-        if (!joypad->left)  val &= ~0x02;
-        if (!joypad->up)    val &= ~0x04;
-        if (!joypad->down)  val &= ~0x08;
+        val &= ~0x10;
+        if (joypad->right) val &= ~0x01;
+        if (joypad->left)  val &= ~0x02;
+        if (joypad->up)    val &= ~0x04;
+        if (joypad->down)  val &= ~0x08;
     }
-
     return val;
 }
