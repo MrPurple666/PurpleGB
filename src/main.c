@@ -3,6 +3,8 @@
 #include <string.h>
 
 #include "memory.h"
+#include "cpu.h"
+#include "interrupt.h"
 
 #define LCD_WIDTH  160
 #define LCD_HEIGHT 144
@@ -10,6 +12,8 @@
 int main(int argc, char **argv)
 {
     (void)argc; (void)argv;
+
+    cpu_init_opcodes();
 
     if (!SDL_Init(SDL_INIT_VIDEO)) return 1;
 
@@ -24,7 +28,9 @@ int main(int argc, char **argv)
     if (!texture) { SDL_DestroyRenderer(renderer); SDL_DestroyWindow(window); SDL_Quit(); return 1; }
 
     mem_t mem;
+    cpu_t cpu;
     mem_init(&mem);
+    cpu_init(&cpu);
 
     u32 framebuffer[LCD_WIDTH * LCD_HEIGHT];
     memset(framebuffer, 0xFF, sizeof(framebuffer));
@@ -35,6 +41,10 @@ int main(int argc, char **argv)
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_EVENT_QUIT) quit = true;
         }
+
+        // Run a few CPU steps
+        for (int i = 0; i < 1000 && !cpu.halted && !cpu.stopped; i++)
+            cpu_step(&cpu, &mem);
 
         SDL_UpdateTexture(texture, NULL, framebuffer, LCD_WIDTH * sizeof(u32));
         SDL_RenderTexture(renderer, texture, NULL, NULL);
