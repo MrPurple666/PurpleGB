@@ -177,15 +177,7 @@ void mem_write(mem_t *mem, u16 addr, u8 val)
 {
     if (mem->dma_active && addr < 0xFF80) return;
     if (addr < 0x8000) { mbc_write(mem, addr, val); return; }
-    if (addr < 0xA000) { 
-        static int vcnt = 50;
-        if (vcnt > 0 && addr >= 0x8000) {
-            fprintf(stderr, "VRAM write $%04X <- %02X\n", addr, val);
-            vcnt--;
-        }
-        mem->vram[addr & 0x1FFF] = val; 
-        return; 
-    }
+    if (addr < 0xA000) { mem->vram[addr & 0x1FFF] = val; return; }
     if (addr < 0xC000) {
         if (mem->mbc_ram_enable && mem->eram && mem->ram_banks > 0)
             mem->eram[mem->mbc_ram_bank * 0x2000 + (addr & 0x1FFF)] = val;
@@ -207,13 +199,7 @@ void mem_write(mem_t *mem, u16 addr, u8 val)
             case 0x06: mem->io[0x06] = val; break;
             case 0x07: mem->io[0x07] = val & 0x07; break;
             case 0x0F: mem->io[0x0F] = val & 0x1F; break;
-            case 0x40: 
-                mem->io[0x40] = val; 
-                fprintf(stderr, "LCDC write: %02X (tilemap=%s tiles=%s)\n", val,
-                    (val & 0x08) ? "$9C00" : "$9800",
-                    (val & 0x10) ? "unsigned" : "signed");
-                break;
-            case 0x41: case 0x42: case 0x43:
+            case 0x40: case 0x41: case 0x42: case 0x43:
             case 0x45: case 0x47: case 0x48: case 0x49:
             case 0x4A: case 0x4B: mem->io[reg] = val; break;
             case 0x46:
