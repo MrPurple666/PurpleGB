@@ -89,9 +89,16 @@ int main(int argc,char**argv){
             for(int y=0;y<144;y++)for(int x=0;x<160;x++){u32 c=fb[y*160+x];fb[y*160+x]=0xFF000000|((u32)(((c>>16)&0xFF)*0.5f))<<16|((u32)(((c>>8)&0xFF)*0.5f))<<8|(u32)((c&0xFF)*0.5f);}
             for(int y=40;y<110;y++)for(int x=40;x<120;x++)fb[y*160+x]=0xFF444444;
         }
+        // Dump tile data at $8000 and $9000 on first frame
+        if (gb.fc == 1 && gb.rom_loaded) {
+            fprintf(stderr, "TILE0@8000:");
+            for (int i = 0; i < 16; i++) fprintf(stderr, " %02X", gb.mem.vram[i]);
+            fprintf(stderr, "\nTILE0@9000:");
+            for (int i = 0; i < 16; i++) fprintf(stderr, " %02X", gb.mem.vram[0x1000 + i]);
+            fprintf(stderr, "\n");
+        }
         SDL_UpdateTexture(gb.t,NULL,gb.ppu.framebuffer,160*4);
-        SDL_RenderTexture(gb.r,gb.t,NULL,NULL);SDL_RenderPresent(gb.r);
-        gb.fc++;u32 nw=SDL_GetTicks();
+        gb.fc++; u32 nw = SDL_GetTicks();
         if(nw-gb.fps_ts>=1000){char t[128];snprintf(t,sizeof(t),"PurpleGB — %s [%u FPS]",gb.rom_loaded?gb.mem.rom_title:"(no ROM)",gb.fc);SDL_SetWindowTitle(gb.w,t);gb.fps_ts=nw;gb.fc=0;}
         u32 el=SDL_GetTicks()-fs;if(el<16)SDL_Delay(16-el);
     }
