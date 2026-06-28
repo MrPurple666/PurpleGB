@@ -57,25 +57,18 @@ void ppu_init(ppu_t *ppu)
     ppu->stat_signal = 0;
 }
 
-// Fetch a 2bpp tile line (8 pixels) from VRAM
-// tile_index: 0-255 (unsigned mode) or 0-255 (signed mode, offset by 128)
-// line: which of 8 rows (0-7)
-static void fetch_tile_line(u8 *pixels, mem_t *mem, int tile_index, int line)
+static void fetch_tile_line(u8 *pixels, mem_t *mem, int tile_index, int line, bool signed_mode)
 {
     u16 addr;
-    if (tile_index < 128) {
+    if (signed_mode)
+        addr = 0x9000 + (s8)tile_index * 16 + line * 2;
+    else
         addr = 0x8000 + tile_index * 16 + line * 2;
-    } else {
-        addr = 0x8800 + (s8)(tile_index - 128) * 16 + line * 2;
-    }
 
     u8 byte0 = mem_read(mem, addr);
     u8 byte1 = mem_read(mem, addr + 1);
-
-    for (int i = 0; i < 8; i++) {
-        int bit = 7 - i;
-        pixels[i] = ((byte0 >> bit) & 1) | (((byte1 >> bit) & 1) << 1);
-    }
+    for (int i = 0; i < 8; i++)
+        pixels[i] = ((byte0 >> (7-i)) & 1) | (((byte1 >> (7-i)) & 1) << 1);
 }
 
 void render_scanline(ppu_t *ppu, mem_t *mem, int ly)
@@ -93,27 +86,20 @@ void render_scanline(ppu_t *ppu, mem_t *mem, int ly)
         return;
     }
 
-    // --- Background ---
+    bool tile_signed = !(lcdc & LCDC_TILE_DATA);
+    u8 scy = ppu->scy, scx = ppu->scx;
     if (lcdc & LCDC_BG_DISPLAY) {
         u16 map_base = (lcdc & LCDC_BG_MAP) ? 0x9C00 : 0x9800;
-        (void)0; // tile_signed unused — tile fetch handles both modes
-        u8 scy = ppu->scy;
-        u8 scx = ppu->scx;
-
         for (int x = 0; x < LCD_WIDTH; x++) {
             int map_x = ((x + scx) & 0xFF) / 8;
             int map_y = ((ly + scy) & 0xFF) / 8;
             int tile_x = (x + scx) & 7;
             int tile_y = (ly + scy) & 7;
-
             u16 map_addr = map_base + map_y * 32 + map_x;
             int tile_index = mem_read(mem, map_addr);
-
             u8 pixels[8];
-            fetch_tile_line(pixels, mem, tile_index, tile_y);
-
-            u8 color = pixels[tile_x];
-            ppu->line_buf[x] = color;
+            fetch_tile_line(pixels, mem, tile_index, tile_y, tile_signed);
+            ppu->line_buf[x] = (ppu->bgp >> (pixels[tile_x] * 2)) & 3;
         }
     }
 
@@ -135,10 +121,11 @@ void render_scanline(ppu_t *ppu, mem_t *mem, int ly)
             int tile_index = mem_read(mem, map_addr);
 
             u8 pixels[8];
-            fetch_tile_line(pixels, mem, tile_index, tile_y);
+            fetch_tile_line(pixels, mem, tile_index, tile_y, tile_signed);
 
-            ppu->line_buf[screen_x] = pixels[tile_x];
+            ppu->line_buf[screen_x] = (ppu->bgp >> (pixels[tile_x] * 2)) & 3;
         }
+        ppu->window_line++;
     }
 
     // --- Sprites ---
@@ -185,7 +172,7 @@ void render_scanline(ppu_t *ppu, mem_t *mem, int ly)
             if (sprite_height == 16) tile_index &= 0xFE; // 8x16: use bits 1-7 of tile index, bit 0 selects bank
 
             u8 pixels[8];
-            fetch_tile_line(pixels, mem, tile_index, tile_line & 7);
+            fetch_tile_line(pixels, mem, tile_index, tile_line & 7, false);
 
             int x_start = sx - 8;
             for (int p = 0; p < 8; p++) {
@@ -207,13 +194,8 @@ void render_scanline(ppu_t *ppu, mem_t *mem, int ly)
         }
     }
 
-    // --- Blend line to framebuffer ---
-    for (int x = 0; x < LCD_WIDTH; x++) {
-        u8 pal_idx = ppu->line_buf[x];
-        // Apply BGP palette to background/window
-        u8 pal_color = (ppu->bgp >> (pal_idx * 2)) & 3;
-        ppu->framebuffer[ly * LCD_WIDTH + x] = dmg_colors[pal_color];
-    }
+    for (int x = 0; x < LCD_WIDTH; x++)
+        ppu->framebuffer[ly * LCD_WIDTH + x] = dmg_colors[ppu->line_buf[x]];
 }
 
 // Update LY-LYC coincidence and STAT interrupt
