@@ -5,6 +5,7 @@
 #include "memory.h"
 #include "cpu.h"
 #include "interrupt.h"
+#include "timer.h"
 
 #define LCD_WIDTH  160
 #define LCD_HEIGHT 144
@@ -29,8 +30,10 @@ int main(int argc, char **argv)
 
     mem_t mem;
     cpu_t cpu;
+    timer_t timer;
     mem_init(&mem);
     cpu_init(&cpu);
+    timer_init(&timer);
 
     u32 framebuffer[LCD_WIDTH * LCD_HEIGHT];
     memset(framebuffer, 0xFF, sizeof(framebuffer));
@@ -42,9 +45,10 @@ int main(int argc, char **argv)
             if (e.type == SDL_EVENT_QUIT) quit = true;
         }
 
-        // Run a few CPU steps
-        for (int i = 0; i < 1000 && !cpu.halted && !cpu.stopped; i++)
-            cpu_step(&cpu, &mem);
+        for (int i = 0; i < 1000 && !cpu.halted && !cpu.stopped; i++) {
+            int cyc = cpu_step(&cpu, &mem);
+            timer_tick(&timer, &mem, cyc);
+        }
 
         SDL_UpdateTexture(texture, NULL, framebuffer, LCD_WIDTH * sizeof(u32));
         SDL_RenderTexture(renderer, texture, NULL, NULL);
