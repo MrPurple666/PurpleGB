@@ -46,4 +46,6 @@ void mem_write(mem_t *m, u16 a, u8 v);
 void mem_write16(mem_t *m, u16 a, u16 v);
 void mem_dma_tick(mem_t *m, int c);
 
+void decode_logo(mem_t *m);
+
 #endif
