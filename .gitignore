@@ -1,0 +1,5 @@
+purplegb
+*.o
+*.gb
+*.gbc
+references/
