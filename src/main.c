@@ -8,6 +8,7 @@
 #include "timer.h"
 #include "joypad.h"
 #include "ppu.h"
+#include "apu.h"
 
 int main(int argc, char **argv)
 {
@@ -15,7 +16,7 @@ int main(int argc, char **argv)
 
     cpu_init_opcodes();
 
-    if (!SDL_Init(SDL_INIT_VIDEO)) return 1;
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) return 1;
 
     SDL_Window *window = SDL_CreateWindow("PurpleGB", 480, 432, SDL_WINDOW_RESIZABLE);
     if (!window) { SDL_Quit(); return 1; }
@@ -32,11 +33,24 @@ int main(int argc, char **argv)
     timer_t timer;
     joypad_t joypad;
     ppu_t ppu;
+    apu_t apu;
     mem_init(&mem);
     cpu_init(&cpu);
     timer_init(&timer);
     joypad_init(&joypad);
     ppu_init(&ppu);
+    apu_init(&apu);
+
+    SDL_AudioSpec aspec = {0};
+    aspec.format = SDL_AUDIO_S16;
+    aspec.channels = 2;
+    aspec.freq = SAMPLE_RATE;
+    SDL_AudioStream *audio_stream = SDL_OpenAudioDeviceStream(
+        SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &aspec, NULL, NULL);
+    if (audio_stream)
+        SDL_ResumeAudioDevice(SDL_GetAudioStreamDevice(audio_stream));
+
+    s16 audio_buf[512];
 
     bool quit = false;
     while (!quit) {
@@ -46,11 +60,20 @@ int main(int argc, char **argv)
             joypad_handle_event(&joypad, &mem, &e);
         }
 
-        for (int i = 0; i < 1000 && !cpu.halted && !cpu.stopped; i++) {
+        int total = 0;
+        while (total < 70224 && !cpu.halted && !cpu.stopped) {
             int cyc = cpu_step(&cpu, &mem);
             ppu_tick(&ppu, &mem, cyc);
             timer_tick(&timer, &mem, cyc);
+            apu_tick(&apu, cyc);
+            total += cyc;
         }
+
+        int samples = (70224 * SAMPLE_RATE) / T_CYCLES_PER_SEC;
+        if (samples > 512) samples = 512;
+        apu_generate(&apu, audio_buf, samples);
+        if (audio_stream)
+            SDL_PutAudioStreamData(audio_stream, audio_buf, samples * sizeof(s16) * 2);
 
         SDL_UpdateTexture(texture, NULL, ppu.framebuffer, 160 * sizeof(u32));
         SDL_RenderTexture(renderer, texture, NULL, NULL);
@@ -58,6 +81,7 @@ int main(int argc, char **argv)
         SDL_Delay(16);
     }
 
+    if (audio_stream) SDL_DestroyAudioStream(audio_stream);
     SDL_DestroyTexture(texture);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
