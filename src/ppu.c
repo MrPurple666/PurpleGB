@@ -46,16 +46,7 @@ static const u32 dmg_colors[4] = {
 void ppu_init(ppu_t *ppu)
 {
     memset(ppu, 0, sizeof(*ppu));
-    ppu->lcdc = 0x91;
-    ppu->stat = 0x85;
-    ppu->bgp = 0xFC;
-    ppu->obp0 = 0xFF;
-    ppu->obp1 = 0xFF;
-    ppu->mode = PPU_MODE_OAM;  // Start with OAM read
-    ppu->cycles = 0;
-    ppu->ly = 0;
-    ppu->window_line = 0;
-    ppu->stat_signal = 0;
+    ppu->mode = PPU_MODE_OAM;
 }
 
 static void fetch_tile_line(u8 *pixels, mem_t *mem, int tile_index, int line, bool signed_mode)
@@ -74,7 +65,7 @@ static void fetch_tile_line(u8 *pixels, mem_t *mem, int tile_index, int line, bo
 
 void render_scanline(ppu_t *ppu, mem_t *mem, int ly)
 {
-    u8 lcdc = ppu->lcdc;
+    u8 lcdc = mem->io[0x40];
 
     // Clear line buffer
     memset(ppu->line_buf, 0, LCD_WIDTH);
@@ -88,7 +79,7 @@ void render_scanline(ppu_t *ppu, mem_t *mem, int ly)
     }
 
     bool tile_signed = !(lcdc & LCDC_TILE_DATA);
-    u8 scy = ppu->scy, scx = ppu->scx;
+    u8 scy = mem->io[0x42], scx = mem->io[0x43];
     if (lcdc & LCDC_BG_DISPLAY) {
         u16 map_base = (lcdc & LCDC_BG_MAP) ? 0x9C00 : 0x9800;
         for (int x = 0; x < LCD_WIDTH; x++) {
@@ -100,14 +91,14 @@ void render_scanline(ppu_t *ppu, mem_t *mem, int ly)
             int tile_index = mem_read(mem, map_addr);
             u8 pixels[8];
             fetch_tile_line(pixels, mem, tile_index, tile_y, tile_signed);
-            ppu->line_buf[x] = (ppu->bgp >> (pixels[tile_x] * 2)) & 3;
+            ppu->line_buf[x] = (mem->io[0x47] >> (pixels[tile_x] * 2)) & 3;
         }
     }
 
     // --- Window ---
-    if ((lcdc & LCDC_WIN_DISPLAY) && ly >= ppu->wy) {
+    if ((lcdc & LCDC_WIN_DISPLAY) && ly >= mem->io[0x4A]) {
         u16 win_map = (lcdc & LCDC_WIN_MAP) ? 0x9C00 : 0x9800;
-        int win_x = ppu->wx - 7;
+        int win_x = mem->io[0x4B] - 7;
 
         for (int x = 0; x < LCD_WIDTH; x++) {
             int screen_x = x;
@@ -124,7 +115,7 @@ void render_scanline(ppu_t *ppu, mem_t *mem, int ly)
             u8 pixels[8];
             fetch_tile_line(pixels, mem, tile_index, tile_y, tile_signed);
 
-            ppu->line_buf[screen_x] = (ppu->bgp >> (pixels[tile_x] * 2)) & 3;
+            ppu->line_buf[screen_x] = (mem->io[0x47] >> (pixels[tile_x] * 2)) & 3;
         }
         ppu->window_line++;
     }
@@ -163,7 +154,7 @@ void render_scanline(ppu_t *ppu, mem_t *mem, int ly)
             bool x_flip = (sattr & 0x20) != 0;
             bool y_flip = (sattr & 0x40) != 0;
             bool bg_priority = (sattr & 0x80) != 0; // DMG: 1 = behind BG
-            u8 palette = (sattr & 0x10) ? ppu->obp1 : ppu->obp0;
+            u8 palette = (sattr & 0x10) ? mem->io[0x49] : mem->io[0x48];
 
             int sprite_y = sy - 16;
             int tile_line = ly - sprite_y;
@@ -197,7 +188,7 @@ void render_scanline(ppu_t *ppu, mem_t *mem, int ly)
 
     if (ly == 0) {
         fprintf(stderr, "RENDER ly=0 pixel[0]=%02X bgp=%02X vram[0x1800]=%02X\n",
-                ppu->line_buf[0], ppu->bgp, mem->vram[0x1800]);
+                ppu->line_buf[0], mem->io[0x47], mem->vram[0x1800]);
     }
     for (int x = 0; x < LCD_WIDTH; x++)
         ppu->framebuffer[ly * LCD_WIDTH + x] = dmg_colors[ppu->line_buf[x]];
@@ -206,8 +197,8 @@ void render_scanline(ppu_t *ppu, mem_t *mem, int ly)
 // Update LY-LYC coincidence and STAT interrupt
 static void update_stat(ppu_t *ppu, mem_t *mem)
 {
-    bool lyc_eq = (ppu->ly == ppu->lyc);
-    u8 stat = ppu->stat;
+    bool lyc_eq = (ppu->ly == mem->io[0x45]);
+    u8 stat = mem->io[0x41];
 
     // Set LYC flag
     if (lyc_eq)
@@ -217,7 +208,7 @@ static void update_stat(ppu_t *ppu, mem_t *mem)
 
     // Set mode bits
     stat = (stat & ~STAT_MODE_MASK) | (ppu->mode & STAT_MODE_MASK);
-    ppu->stat = stat;
+    mem->io[0x41] = stat;
 
     // Compute combined STAT signal
     int new_signal = 0;
@@ -235,7 +226,7 @@ static void update_stat(ppu_t *ppu, mem_t *mem)
 
 void ppu_tick(ppu_t *ppu, mem_t *mem, int cycles)
 {
-    if (!(ppu->lcdc & LCDC_LCD_ENABLE)) {
+    if (!(mem->io[0x40] & LCDC_LCD_ENABLE)) {
         // LCD disabled: LY stays 0, mode stays 0 (HBlank)
         ppu->ly = 0;
         ppu->mode = PPU_MODE_HBLANK;
@@ -300,39 +291,5 @@ void ppu_tick(ppu_t *ppu, mem_t *mem, int cycles)
                 update_stat(ppu, mem);
             }
         }
-    }
-}
-
-void ppu_write_reg(ppu_t *ppu, u8 reg, u8 val)
-{
-    switch (reg) {
-        case 0x40: ppu->lcdc = val; break;
-        case 0x41: ppu->stat = (val & 0xF8) | (ppu->stat & 0x07); break;
-        case 0x42: ppu->scy = val; break;
-        case 0x43: ppu->scx = val; break;
-        case 0x45: ppu->lyc = val; break;
-        case 0x47: ppu->bgp = val; break;
-        case 0x48: ppu->obp0 = val; break;
-        case 0x49: ppu->obp1 = val; break;
-        case 0x4A: ppu->wy = val; break;
-        case 0x4B: ppu->wx = val; break;
-    }
-}
-
-u8 ppu_read_reg(ppu_t *ppu, u8 reg)
-{
-    switch (reg) {
-        case 0x40: return ppu->lcdc;
-        case 0x41: return ppu->stat;
-        case 0x42: return ppu->scy;
-        case 0x43: return ppu->scx;
-        case 0x44: return ppu->ly;
-        case 0x45: return ppu->lyc;
-        case 0x47: return ppu->bgp;
-        case 0x48: return ppu->obp0;
-        case 0x49: return ppu->obp1;
-        case 0x4A: return ppu->wy;
-        case 0x4B: return ppu->wx;
-        default: return 0xFF;
     }
 }

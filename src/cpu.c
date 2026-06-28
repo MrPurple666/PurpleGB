@@ -17,8 +17,22 @@ static inline void sr(cpu_t*c,mem_t*m,int r,u8 v){
 
 void cpu_init(cpu_t*c){memset(c,0,sizeof(*c));cpu_set_af(c,0x01B0);cpu_set_bc(c,0x0013);cpu_set_de(c,0x00D8);cpu_set_hl(c,0x014D);c->sp=0xFFFE;c->pc=0x0100;}
 int cpu_service_interrupt(cpu_t*c,mem_t*m){u8 p=interrupt_get_pending(m);if(!p)return 0;int b=0;while(!(p&1)){b++;p>>=1;}c->ime=0;c->halted=0;c->sp-=2;mem_write16(m,c->sp,c->pc);c->pc=0x40+(b<<3);m->io[0x0F]&=~(1<<b);return 20;}
-int cpu_step(cpu_t*c,mem_t*m){if(c->halt_bug){if(c->pc)c->pc--;c->halt_bug=0;}if(c->halted){if(interrupt_pending(m))c->halted=0;return 1;}if(c->stopped)return 1;if(c->ime&&interrupt_pending(m))return cpu_service_interrupt(c,m);u8 op=mem_read(m,c->pc++);if(op==0xCB){u8 cb=mem_read(m,c->pc++);cb_opcodes[cb](c,m);if(c->ime_scheduled){c->ime=1;c->ime_scheduled=0;}return cb_cycles[cb];}main_opcodes[op](c,m);if(c->ime_scheduled){c->ime=1;c->ime_scheduled=0;}return main_cycles[op];}
-
+int cpu_step(cpu_t*c,mem_t*m){
+    static int vram_dump = 1;
+    if(c->halt_bug){if(c->pc)c->pc--;c->halt_bug=0;}
+    if(c->halted){if(interrupt_pending(m))c->halted=0;return 1;}
+    if(c->stopped)return 1;
+    if(c->ime&&interrupt_pending(m))return cpu_service_interrupt(c,m);
+    u8 op=mem_read(m,c->pc++);
+    if(op==0xCB){u8 cb=mem_read(m,c->pc++);cb_opcodes[cb](c,m);
+        if(c->ime_scheduled){c->ime=1;c->ime_scheduled=0;}return cb_cycles[cb];}
+    main_opcodes[op](c,m);
+    if(vram_dump) {
+        int has_data = 0;
+        for(int k=0;k<0x2000;k++) if(m->vram[k]) { has_data=1; break; }
+        if(has_data) { fprintf(stderr,"VRAM has non-zero data!\n"); vram_dump=0; }
+    }
+    if(c->ime_scheduled){c->ime=1;c->ime_scheduled=0;}return main_cycles[op];}
 #define ALU(name,code) static void alu_##name(cpu_t*c,u8 v){code}
 ALU(add,{u16 r=c->a+v;cpu_set_z(c,!(r&0xFF));cpu_set_n(c,0);cpu_set_h(c,((c->a&0xF)+(v&0xF))>0xF);cpu_set_c(c,r>0xFF);c->a=r&0xFF;})
 ALU(adc,{u8 cy=cpu_get_c(c)?1:0;u16 r=c->a+v+cy;cpu_set_z(c,!(r&0xFF));cpu_set_n(c,0);cpu_set_h(c,((c->a&0xF)+(v&0xF)+cy)>0xF);cpu_set_c(c,r>0xFF);c->a=r&0xFF;})
