@@ -225,11 +225,6 @@ int main(int argc, char **argv) {
             SDL_SetWindowTitle(gb.window, title);
             gb.fps_timer = now; gb.frame_count = 0;
         }
-        // TEMP: force LCDC on after 60 frames
-        if (gb.rom_loaded && gb.frame_count == 60) {
-            gb.mem.io[0x40] = 0x91;
-            fprintf(stderr, "FORCED LCDC=0x91 at frame 60\n");
-        }
         if (gb.paused && gb.rom_loaded) draw_menu(&gb);
         u32 elapsed = SDL_GetTicks() - frame_start;
         if (elapsed < 16) SDL_Delay(16 - elapsed);
