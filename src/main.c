@@ -216,12 +216,6 @@ int main(int argc, char **argv) {
                 SDL_PutAudioStreamData(gb.audio_stream, gb.audio_buf, samples * sizeof(s16) * 2);
         }
 
-        if (gb.paused && gb.rom_loaded) draw_menu(&gb);
-
-        SDL_UpdateTexture(gb.texture, NULL, gb.ppu.framebuffer, 160 * sizeof(u32));
-        SDL_RenderTexture(gb.renderer, gb.texture, NULL, NULL);
-        SDL_RenderPresent(gb.renderer);
-
         gb.frame_count++;
         u32 now = SDL_GetTicks();
         if (now - gb.fps_timer >= 1000) {
@@ -231,6 +225,12 @@ int main(int argc, char **argv) {
             SDL_SetWindowTitle(gb.window, title);
             gb.fps_timer = now; gb.frame_count = 0;
         }
+        // TEMP: force LCDC on after 60 frames
+        if (gb.rom_loaded && gb.frame_count == 60) {
+            gb.mem.io[0x40] = 0x91;
+            fprintf(stderr, "FORCED LCDC=0x91 at frame 60\n");
+        }
+        if (gb.paused && gb.rom_loaded) draw_menu(&gb);
         u32 elapsed = SDL_GetTicks() - frame_start;
         if (elapsed < 16) SDL_Delay(16 - elapsed);
     }

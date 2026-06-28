@@ -213,7 +213,15 @@ void mem_write(mem_t *mem, u16 addr, u8 val)
             case 0x06: mem->io[0x06] = val; break;
             case 0x07: mem->io[0x07] = val & 0x07; break;
             case 0x0F: mem->io[0x0F] = val & 0x1F; break;
-            case 0x40: case 0x41: case 0x42: case 0x43:
+            case 0x40: {
+                static int lcdc_count = 0;
+                if (lcdc_count < 20) {
+                    fprintf(stderr, "LCDC <- %02X (#%d)\n", val, lcdc_count++);
+                }
+                mem->io[0x40] = val;
+                break;
+            }
+            case 0x41: case 0x42: case 0x43:
             case 0x45: case 0x47: case 0x48: case 0x49:
             case 0x4A: case 0x4B: mem->io[reg] = val; break;
             case 0x46:
@@ -233,7 +241,7 @@ void mem_write(mem_t *mem, u16 addr, u8 val)
             case 0x3C: case 0x3D: case 0x3E: case 0x3F:
                 mem->io[reg] = val; break;
             default: mem->io[reg] = val; break;
-        }
+}
         return;
     }
     if (addr < 0xFFFF) { mem->hram[addr & 0x7F] = val; return; }
