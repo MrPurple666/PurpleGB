@@ -6,6 +6,7 @@
 #include "cpu.h"
 #include "interrupt.h"
 #include "timer.h"
+#include "joypad.h"
 
 #define LCD_WIDTH  160
 #define LCD_HEIGHT 144
@@ -31,9 +32,11 @@ int main(int argc, char **argv)
     mem_t mem;
     cpu_t cpu;
     timer_t timer;
+    joypad_t joypad;
     mem_init(&mem);
     cpu_init(&cpu);
     timer_init(&timer);
+    joypad_init(&joypad);
 
     u32 framebuffer[LCD_WIDTH * LCD_HEIGHT];
     memset(framebuffer, 0xFF, sizeof(framebuffer));
@@ -43,6 +46,7 @@ int main(int argc, char **argv)
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_EVENT_QUIT) quit = true;
+            joypad_handle_event(&joypad, &mem, &e);
         }
 
         for (int i = 0; i < 1000 && !cpu.halted && !cpu.stopped; i++) {
