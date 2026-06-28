@@ -96,6 +96,7 @@ static void reset_emu(gb_t *gb) {
 static void load_rom(gb_t *gb, const char *path) {
     if (!mem_load_rom(&gb->mem, path)) return;
     reset_emu(gb);
+    gb->mem.joypad = &gb->joypad;
     if (!mem_load_rom(&gb->mem, path)) return;
     gb->rom_loaded = true;
     if (gb->audio_stream) { SDL_DestroyAudioStream(gb->audio_stream); gb->audio_stream = NULL; }
@@ -138,6 +139,7 @@ int main(int argc, char **argv) {
     gb_t gb = {0};
     cpu_init_opcodes();
     reset_emu(&gb);
+    gb.mem.joypad = &gb.joypad;
 
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) return 1;
     gb.window = SDL_CreateWindow("PurpleGB", 480, 432, SDL_WINDOW_RESIZABLE);

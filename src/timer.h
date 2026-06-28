@@ -5,7 +5,6 @@
 
 typedef struct {
     u16 div_counter;
-    u8 tima, tma, tac;
 } timer_t;
 
 void timer_init(timer_t *timer);

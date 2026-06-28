@@ -48,8 +48,8 @@ typedef struct {
     bool dma_active;
     int  dma_cycles;
     u8   dma_source_page;
+    void *joypad;
 } mem_t;
-
 void mem_init(mem_t *mem);
 bool mem_load_rom(mem_t *mem, const char *path);
 u8   mem_read(mem_t *mem, u16 addr);

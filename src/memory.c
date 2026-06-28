@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "joypad.h"
 
 void mem_init(mem_t *mem)
 {
@@ -168,7 +169,11 @@ u8 mem_read(mem_t *mem, u16 addr)
     if (addr < 0xFE00) return mem->wram[addr & 0x1FFF];
     if (addr < 0xFEA0) return mem->oam[addr & 0xFF];
     if (addr < 0xFF00) return 0xFF;
-    if (addr < 0xFF80) return mem->io[addr & 0x7F];
+        if (addr < 0xFF80) {
+        if (addr == 0xFF00 && mem->joypad)
+            return joypad_read((joypad_t *)mem->joypad);
+        return mem->io[addr & 0x7F];
+    }
     if (addr < 0xFFFF) return mem->hram[addr & 0x7F];
     return mem->ie;
 }

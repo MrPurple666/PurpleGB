@@ -186,10 +186,6 @@ void render_scanline(ppu_t *ppu, mem_t *mem, int ly)
         }
     }
 
-    if (ly == 0) {
-        fprintf(stderr, "RENDER ly=0 pixel[0]=%02X bgp=%02X vram[0x1800]=%02X\n",
-                ppu->line_buf[0], mem->io[0x47], mem->vram[0x1800]);
-    }
     for (int x = 0; x < LCD_WIDTH; x++)
         ppu->framebuffer[ly * LCD_WIDTH + x] = dmg_colors[ppu->line_buf[x]];
 }
