@@ -11,9 +11,6 @@ static const u8 duty_table[4][8] = {
     {0,1,1,1,1,1,1,0}, /* 75% */
 };
 
-/* Length table */
-static const u16 length_table[4] = {64, 256, 16 * 2, 4 * 2};
-
 static void channel_tick_length(channel_t *ch) {
     if (ch->length_enabled && ch->length_counter > 0) {
         ch->length_counter--;
@@ -348,7 +345,7 @@ void apu_write(apu_t *apu, u16 addr, u8 val) {
             break;
         case 0xFF11: /* NR11 - Duty/Length */
             apu->ch1.duty = (val >> 6) & 3;
-            apu->ch1.length_counter = length_table[apu->ch1.duty] - (val & 0x3F);
+            apu->ch1.length_counter = 64 - (val & 0x3F);
             break;
         case 0xFF12: /* NR12 - Volume/Envelope */
             apu->ch1.volume_init = (val >> 4) & 0x0F;
