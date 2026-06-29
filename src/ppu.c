@@ -68,6 +68,7 @@ void ppu_init(ppu_t *ppu)
 {
     memset(ppu, 0, sizeof(*ppu));
     ppu->mode = PPU_MODE_OAM;
+    ppu->mode3_length = 172;
 }
 
 /* Compute variable Mode 3 timing based on sprite count and SCX fine scroll */

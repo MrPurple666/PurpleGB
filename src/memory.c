@@ -143,23 +143,28 @@ static void sgb_pal_set(mem_t *m, const u8 *payload)
 
 static void seed_compat_palettes(mem_t *m)
 {
-    static const u16 shades[4] = { 0x7FFF, 0x56B5, 0x294A, 0x0000 };
     if (m->cgb && !m->cart_cgb) {
+        static const u16 dmg_green[4] = { 0x5F60, 0x3A40, 0x1900, 0x0080 };
         for (int i = 0; i < 4; i++) {
-            m->bg_palette[i * 2] = (u8)(shades[i] & 0xFF);
-            m->bg_palette[i * 2 + 1] = (u8)(shades[i] >> 8);
-            m->obj_palette[i * 2] = (u8)(shades[i] & 0xFF);
-            m->obj_palette[i * 2 + 1] = (u8)(shades[i] >> 8);
-            m->obj_palette[8 + i * 2] = (u8)(shades[i] & 0xFF);
-            m->obj_palette[8 + i * 2 + 1] = (u8)(shades[i] >> 8);
+            m->bg_palette[i * 2] = (u8)(dmg_green[i] & 0xFF);
+            m->bg_palette[i * 2 + 1] = (u8)(dmg_green[i] >> 8);
+            m->obj_palette[i * 2] = (u8)(dmg_green[i] & 0xFF);
+            m->obj_palette[i * 2 + 1] = (u8)(dmg_green[i] >> 8);
+            m->obj_palette[8 + i * 2] = (u8)(dmg_green[i] & 0xFF);
+            m->obj_palette[8 + i * 2 + 1] = (u8)(dmg_green[i] >> 8);
         }
     }
     if (m->sgb) {
+        static const u16 sgb0[4] = { 0x7FFF, 0x7FE0, 0x4F20, 0x0000 };
+        static const u16 sgb1[4] = { 0x7FFF, 0x7C80, 0x3C40, 0x0000 };
+        static const u16 sgb2[4] = { 0x7FFF, 0x03E0, 0x0200, 0x0000 };
+        static const u16 sgb3[4] = { 0x7FFF, 0x56B5, 0x294A, 0x0000 };
         memset(m->sgb_attr_map, 0, sizeof(m->sgb_attr_map));
-        for (int pal = 0; pal < 4; pal++) {
-            for (int i = 0; i < 4; i++) {
-                m->sgb_palettes[pal][i] = shades[i];
-            }
+        for (int i = 0; i < 4; i++) {
+            m->sgb_palettes[0][i] = sgb0[i];
+            m->sgb_palettes[1][i] = sgb1[i];
+            m->sgb_palettes[2][i] = sgb2[i];
+            m->sgb_palettes[3][i] = sgb3[i];
         }
     }
 }
