@@ -95,7 +95,7 @@ F op_rlca(cpu_t*c,mem_t*m){(void)m;u8 b=(c->a>>7)&1;c->a=(c->a<<1)|b;cpu_set_z(c
 F op_rla(cpu_t*c,mem_t*m){(void)m;u8 cy=cpu_get_c(c)?1:0,nb=(c->a>>7)&1;c->a=(c->a<<1)|cy;cpu_set_z(c,0);cpu_set_n(c,0);cpu_set_h(c,0);cpu_set_c(c,nb);}
 F op_rrca(cpu_t*c,mem_t*m){(void)m;u8 b=c->a&1;c->a=(c->a>>1)|(b<<7);cpu_set_z(c,0);cpu_set_n(c,0);cpu_set_h(c,0);cpu_set_c(c,b);}
 F op_rra(cpu_t*c,mem_t*m){(void)m;u8 cy=cpu_get_c(c)?1:0,nb=c->a&1;c->a=(c->a>>1)|(cy<<7);cpu_set_z(c,0);cpu_set_n(c,0);cpu_set_h(c,0);cpu_set_c(c,nb);}
-F op_daa(cpu_t*c,mem_t*m){(void)m;u16 a=c->a;if(!cpu_get_n(c)){if(cpu_get_h(c)||(a&0xF)>9)a+=6;if(cpu_get_c(c)||a>0x9F)a+=0x60;}else{if(cpu_get_h(c))a=(a-6)&0xFF;if(cpu_get_c(c))a-=0x60;}c->a&=0xFF;cpu_set_z(c,!c->a);cpu_set_h(c,0);cpu_set_c(c,cpu_get_c(c)||a>0xFF?!!(a&~0xFF):c->a>0x99);}
+F op_daa(cpu_t*c,mem_t*m){(void)m;u16 a=c->a;bool carry=cpu_get_c(c);if(!cpu_get_n(c)){if(cpu_get_h(c)||(a&0x0F)>9)a+=6;if(carry||a>0x9F){a+=0x60;carry=true;}}else{if(cpu_get_h(c))a=(a-6)&0xFF;if(carry)a=(a-0x60)&0xFF;}c->a=(u8)a;cpu_set_z(c,!c->a);cpu_set_h(c,0);cpu_set_c(c,carry);}
 F op_cpl(cpu_t*c,mem_t*m){(void)m;c->a=~c->a;cpu_set_n(c,1);cpu_set_h(c,1);}
 F op_ccf(cpu_t*c,mem_t*m){(void)m;cpu_set_n(c,0);cpu_set_h(c,0);cpu_set_c(c,!cpu_get_c(c));}
 F op_scf(cpu_t*c,mem_t*m){(void)m;cpu_set_n(c,0);cpu_set_h(c,0);cpu_set_c(c,1);}
