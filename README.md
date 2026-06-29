@@ -18,8 +18,11 @@ Implemented or partially implemented:
 - One-shot LCD off/on state handling
 - CGB detection, VRAM banking, WRAM banking
 - CGB BG/OBJ palette registers (BCPS/BCPD/OCPS/OCPD)
+- CGB compatibility palettes for monochrome games (BGP/OBP0/OBP1 into CGB palette 0/OBJ 0-1)
 - CGB BG attribute map (palette, flip, VRAM bank, priority)
 - CGB OBJ attributes (palette, VRAM bank)
+- SGB screen palettes (PAL01/PAL23/PAL03/PAL12, PAL_SET, PAL_TRN)
+- SGB per-cell 20×18 palette map for visible game screen rendering
 - DIV/TIMA/TMA/TAC timer with falling-edge accuracy
 - APU: 4 sound channels (square + sweep, square, wave, noise)
 - Frame sequencer, length/envelope/sweep counters
@@ -34,7 +37,7 @@ Known rough edges:
 - Graphics are still approximate in places (sprite 0 hit not implemented)
 - HDMA/GDMA registers stored but transfers not executed
 - Double-speed mode registers stored but not applied
-- Accuracy is good enough for debugging, not for compatibility claims
+- SGB attribute commands (`ATTR_*`) and border rendering are still incomplete
 
 ## Requirements
 

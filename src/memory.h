@@ -48,6 +48,7 @@ typedef struct {
     bool cgb;
     bool sgb;
     bool cart_cgb;
+    bool cart_sgb;
     u8 bg_palette[64];
     u8 obj_palette[64];
     u8 cgb_vbk;
@@ -59,6 +60,13 @@ typedef struct {
     u16 cgb_hdma_dst;
     bool cgb_hdma_active;
     u8 cgb_key1;
+    u16 sgb_palettes[4][4];
+    u16 sgb_system_palettes[512][4];
+    u8 sgb_attr_map[20 * 18];
+    bool sgb_packet_active;
+    int sgb_packets_expected;
+    int sgb_bits_received;
+    u8 sgb_packet_data[16 * 7];
 } mem_t;
 
 void mem_init(mem_t *m);

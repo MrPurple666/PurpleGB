@@ -10,22 +10,24 @@ static const u32 dmg_colors[4] = {
     0xFF000000   // black (3)
 };
 
+static u32 rgb555_to_argb(u16 c)
+{
+    u8 r = (c & 0x1F) << 3;
+    u8 g = ((c >> 5) & 0x1F) << 3;
+    u8 b = ((c >> 10) & 0x1F) << 3;
+    return 0xFF000000 | ((u32)r << 16) | ((u32)g << 8) | b;
+}
+
 void ppu_decode_cgb_palettes(ppu_t *ppu, mem_t *mem)
 {
     for (int i = 0; i < 8; i++) {
         for (int j = 0; j < 4; j++) {
             int idx = i * 8 + j * 2;
             u16 c = mem->bg_palette[idx] | ((u16)mem->bg_palette[idx + 1] << 8);
-            u8 r = (c & 0x1F) << 3;
-            u8 g = ((c >> 5) & 0x1F) << 3;
-            u8 b = ((c >> 10) & 0x1F) << 3;
-            ppu->cgb_bg_palettes[i][j] = 0xFF000000 | ((u32)r << 16) | ((u32)g << 8) | b;
+            ppu->cgb_bg_palettes[i][j] = rgb555_to_argb(c);
 
             c = mem->obj_palette[idx] | ((u16)mem->obj_palette[idx + 1] << 8);
-            r = (c & 0x1F) << 3;
-            g = ((c >> 5) & 0x1F) << 3;
-            b = ((c >> 10) & 0x1F) << 3;
-            ppu->cgb_obj_palettes[i][j] = 0xFF000000 | ((u32)r << 16) | ((u32)g << 8) | b;
+            ppu->cgb_obj_palettes[i][j] = rgb555_to_argb(c);
         }
     }
 }
@@ -116,7 +118,8 @@ void render_scanline(ppu_t *ppu, mem_t *mem, int ly)
 
     memset(ppu->line_buf, 0, LCD_WIDTH);
     memset(ppu->bg_color_buf, 0, LCD_WIDTH);
-
+    memset(ppu->obj_palette_buf, 0, LCD_WIDTH);
+    memset(ppu->obj_present_buf, 0, LCD_WIDTH);
     if (!(lcdc & LCDC_LCD_ENABLE)) {
         // LCD disabled: all white
         for (int x = 0; x < LCD_WIDTH; x++) {
@@ -308,6 +311,8 @@ void render_scanline(ppu_t *ppu, mem_t *mem, int ly)
                     u8 bg_color = ppu->bg_color_buf[px];
                     if (!bg_priority || bg_color == 0) {
                         ppu->line_buf[px] = pal_color;
+                        ppu->obj_present_buf[px] = mem->cgb && !mem->cart_cgb;
+                        ppu->obj_palette_buf[px] = (sattr & 0x10) ? 1 : 0;
                     }
                 }
             }
@@ -320,6 +325,12 @@ void render_scanline(ppu_t *ppu, mem_t *mem, int ly)
             u8 pal = val / 4;
             u8 col = val % 4;
             ppu->framebuffer[ly * LCD_WIDTH + x] = ppu->cgb_bg_palettes[pal][col];
+        } else if (mem->cgb) {
+            if (ppu->obj_present_buf[x]) ppu->framebuffer[ly * LCD_WIDTH + x] = ppu->cgb_obj_palettes[ppu->obj_palette_buf[x]][ppu->line_buf[x] & 3];
+            else ppu->framebuffer[ly * LCD_WIDTH + x] = ppu->cgb_bg_palettes[0][ppu->line_buf[x] & 3];
+        } else if (mem->sgb) {
+            u8 pal = mem->sgb_attr_map[(ly >> 3) * 20 + (x >> 3)] & 3;
+            ppu->framebuffer[ly * LCD_WIDTH + x] = rgb555_to_argb(mem->sgb_palettes[pal][ppu->line_buf[x] & 3]);
         } else {
             ppu->framebuffer[ly * LCD_WIDTH + x] = dmg_colors[ppu->line_buf[x]];
         }

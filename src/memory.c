@@ -47,7 +47,7 @@ void mem_init(mem_t *m) {
     m->cgb = false;
     m->sgb = false;
     m->cart_cgb = false;
-    m->cgb_vbk = 0;
+    m->cart_sgb = false;
     m->cgb_svbk = 1;
     memset(m->bg_palette, 0xFF, sizeof(m->bg_palette));
     memset(m->obj_palette, 0xFF, sizeof(m->obj_palette));
@@ -83,6 +83,7 @@ static int mbc(u8 t) {
 static void resolve_model(mem_t *m, u8 cgb_flag, u8 sgb_flag)
 {
     m->cart_cgb = cgb_flag != 0;
+    m->cart_sgb = sgb_flag != 0;
     switch (m->forced_mode) {
         case GB_MODE_DMG: m->active_mode = GB_MODE_DMG; break;
         case GB_MODE_CGB: m->active_mode = GB_MODE_CGB; break;
@@ -90,12 +91,124 @@ static void resolve_model(mem_t *m, u8 cgb_flag, u8 sgb_flag)
         case GB_MODE_AUTO:
         default:
             if (cgb_flag) m->active_mode = GB_MODE_CGB;
-            else if (sgb_flag) m->active_mode = GB_MODE_SGB;
             else m->active_mode = GB_MODE_DMG;
             break;
     }
     m->cgb = m->active_mode == GB_MODE_CGB;
     m->sgb = m->active_mode == GB_MODE_SGB;
+}
+
+static u16 rd16le(const u8 *p)
+{
+    return (u16)p[0] | ((u16)p[1] << 8);
+}
+
+static void sgb_set_color0(mem_t *m, u16 color)
+{
+    for (int i = 0; i < 4; i++) m->sgb_palettes[i][0] = color;
+}
+
+static void sgb_apply_pal_pair(mem_t *m, int a, int b, const u8 *payload)
+{
+    u16 c0 = rd16le(payload + 0);
+    sgb_set_color0(m, c0);
+    m->sgb_palettes[a][1] = rd16le(payload + 2);
+    m->sgb_palettes[a][2] = rd16le(payload + 4);
+    m->sgb_palettes[a][3] = rd16le(payload + 6);
+    m->sgb_palettes[b][1] = rd16le(payload + 8);
+    m->sgb_palettes[b][2] = rd16le(payload + 10);
+    m->sgb_palettes[b][3] = rd16le(payload + 12);
+}
+
+static void sgb_pal_trn(mem_t *m)
+{
+    for (int pal = 0; pal < 512; pal++) {
+        for (int col = 0; col < 4; col++) {
+            int idx = pal * 8 + col * 2;
+            m->sgb_system_palettes[pal][col] = (u16)m->vram_banks[0][idx] | ((u16)m->vram_banks[0][idx + 1] << 8);
+        }
+    }
+}
+
+static void sgb_pal_set(mem_t *m, const u8 *payload)
+{
+    for (int pal = 0; pal < 4; pal++) {
+        u16 id = rd16le(payload + pal * 2) & 0x01FF;
+        for (int col = 0; col < 4; col++) {
+            m->sgb_palettes[pal][col] = m->sgb_system_palettes[id][col];
+        }
+    }
+    sgb_set_color0(m, m->sgb_palettes[0][0]);
+}
+
+static void seed_compat_palettes(mem_t *m)
+{
+    static const u16 shades[4] = { 0x7FFF, 0x56B5, 0x294A, 0x0000 };
+    if (m->cgb && !m->cart_cgb) {
+        for (int i = 0; i < 4; i++) {
+            m->bg_palette[i * 2] = (u8)(shades[i] & 0xFF);
+            m->bg_palette[i * 2 + 1] = (u8)(shades[i] >> 8);
+            m->obj_palette[i * 2] = (u8)(shades[i] & 0xFF);
+            m->obj_palette[i * 2 + 1] = (u8)(shades[i] >> 8);
+            m->obj_palette[8 + i * 2] = (u8)(shades[i] & 0xFF);
+            m->obj_palette[8 + i * 2 + 1] = (u8)(shades[i] >> 8);
+        }
+    }
+    if (m->sgb) {
+        memset(m->sgb_attr_map, 0, sizeof(m->sgb_attr_map));
+        for (int pal = 0; pal < 4; pal++) {
+            for (int i = 0; i < 4; i++) {
+                m->sgb_palettes[pal][i] = shades[i];
+            }
+        }
+    }
+}
+
+static void sgb_exec_command(mem_t *m)
+{
+    u8 header = m->sgb_packet_data[0];
+    u8 cmd = header >> 3;
+    const u8 *payload = &m->sgb_packet_data[1];
+    switch (cmd) {
+        case 0x00: sgb_apply_pal_pair(m, 0, 1, payload); break; /* PAL01 */
+        case 0x01: sgb_apply_pal_pair(m, 2, 3, payload); break; /* PAL23 */
+        case 0x02: sgb_apply_pal_pair(m, 0, 3, payload); break; /* PAL03 */
+        case 0x03: sgb_apply_pal_pair(m, 1, 2, payload); break; /* PAL12 */
+        case 0x0A: sgb_pal_set(m, payload); break;              /* PAL_SET */
+        case 0x0B: sgb_pal_trn(m); break;                       /* PAL_TRN */
+        default: break;
+    }
+}
+
+static void sgb_handle_joyp_write(mem_t *m, u8 sel)
+{
+    if (!m->sgb) return;
+    if (sel == 0x00) {
+        m->sgb_packet_active = true;
+        m->sgb_packets_expected = 0;
+        m->sgb_bits_received = 0;
+        memset(m->sgb_packet_data, 0, sizeof(m->sgb_packet_data));
+        return;
+    }
+    if (!m->sgb_packet_active) return;
+    if (sel != 0x10 && sel != 0x20) return;
+
+    int bit = (sel == 0x10) ? 1 : 0;
+    if (m->sgb_packets_expected == 0 || m->sgb_bits_received < m->sgb_packets_expected * 128) {
+        int byte = m->sgb_bits_received >> 3;
+        int off = m->sgb_bits_received & 7;
+        if (bit) m->sgb_packet_data[byte] |= (u8)(1u << off);
+        m->sgb_bits_received++;
+        if (m->sgb_bits_received == 8) {
+            u8 packets = m->sgb_packet_data[0] & 7;
+            m->sgb_packets_expected = packets ? packets : 1;
+        }
+        return;
+    }
+
+    /* Stop bit: must be 0, then execute. */
+    m->sgb_packet_active = false;
+    if (bit == 0) sgb_exec_command(m);
 }
 
 bool mem_load_rom(mem_t *m, const char *p) {
@@ -109,6 +222,7 @@ bool mem_load_rom(mem_t *m, const char *p) {
         m->rom_title[i] = h[i+0x34];
     m->mbc_type = mbc(h[0x47]);
     resolve_model(m, (u8)((h[0x43] & 0x80) != 0), (u8)(h[0x46] == 0x03));
+    seed_compat_palettes(m);
     m->battery_backed = is_battery_cart(h[0x47]);
     m->rom_banks = h[0x48] <= 8 ? (1 << (h[0x48] + 1)) : 512;
     m->ram_banks = h[0x49] <= 4 ? (1 << (h[0x49] + 2)) : 0;
@@ -220,6 +334,7 @@ void mem_write(mem_t *m, u16 a, u8 v) {
                 jp->select_buttons = !(sel & 0x20);
                 jp->select_dpad = !(sel & 0x10);
             }
+            sgb_handle_joyp_write(m, sel);
             return;
         }
         if (r == 0x01) { m->io[0x01] = v; DBG(MEM, "W FF01 (SB) = %02X", v); return; }

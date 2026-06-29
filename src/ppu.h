@@ -15,6 +15,8 @@ typedef struct {
     bool lcd_was_on;    /* For one-shot LCD-off clear */
     u8 line_buf[LCD_WIDTH];
     u8 bg_color_buf[LCD_WIDTH];
+    u8 obj_palette_buf[LCD_WIDTH];
+    bool obj_present_buf[LCD_WIDTH];
     u8 window_line;
     u8 ly;
     u32 cgb_bg_palettes[8][4];   /* CGB BG palette colors (8 palettes x 4 colors) */
