@@ -9,6 +9,9 @@
 #include "joypad.h"
 #include "interrupt.h"
 #include "ppu.h"
+#include "dbg.h"
+
+uint32_t dbg_mask;
 
 typedef struct {
     mem_t mem; cpu_t cpu; timer_t timer; joypad_t joypad; ppu_t ppu;
@@ -31,7 +34,7 @@ static void rc(void*u,const char*const*fl,int fi){(void)fi;if(fl&&fl[0])lr((gb_t
 
 int main(int argc,char**argv){
     gb_t gb={0};
-    cpu_init_opcodes();re(&gb);gb.mem.joypad=&gb.joypad;gb.mem.timer=&gb.timer;
+    cpu_init_opcodes();re(&gb);gb.mem.joypad=&gb.joypad;gb.mem.timer=&gb.timer;dbg_init();
     if(!SDL_Init(SDL_INIT_VIDEO))return 1;
     gb.w=SDL_CreateWindow("PurpleGB",480,432,SDL_WINDOW_RESIZABLE);
     if(!gb.w){SDL_Quit();return 1;}

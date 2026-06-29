@@ -1,4 +1,5 @@
 #include "cpu.h"
+#include "dbg.h"
 #include "interrupt.h"
 #include <stdio.h>
 #include <string.h>
@@ -25,21 +26,36 @@ int cpu_step(cpu_t*c,mem_t*m){
     if(c->halted){
         if(interrupt_pending(m)){
             c->halted=0;
-            if(c->ime)return cpu_service_interrupt(c,m);
+            if(c->ime){
+                DBG(INT, "Servicing INT from HALT PC=%04X IF=%02X IE=%02X IME=%d", c->pc, m->io[0x0F], m->ie, c->ime);
+                return cpu_service_interrupt(c,m);
+            }
         }else return 1;
     }
     if(c->stopped)return 1;
-    if(c->ime&&interrupt_pending(m))return cpu_service_interrupt(c,m);
+    if(c->ime&&interrupt_pending(m)){
+        DBG(INT, "Servicing INT PC=%04X IF=%02X IE=%02X IME=%d", c->pc, m->io[0x0F], m->ie, c->ime);
+        return cpu_service_interrupt(c,m);
+    }
     bool enable_ime_after=c->ime_scheduled;
     u8 op=mem_read(m,c->pc);
     if(!halt_bug_fetch)c->pc++;
+#ifdef DEBUG
+    u16 dbg_pc = c->pc - (halt_bug_fetch ? 0 : 1);
+#endif
     if(op==0xCB){
         u8 cb=mem_read(m,c->pc++);
         cb_opcodes[cb](c,m);
+#ifdef DEBUG
+        DBG(CPU, "PC=%04X  CB %02X (%s)  " DBG_REGS_FMT, dbg_pc, cb, cb_mnemonics[cb], DBG_REGS_ARGS(c));
+#endif
         if(enable_ime_after){c->ime=1;c->ime_scheduled=0;}
         return cb_cycles[cb];
     }
     main_opcodes[op](c,m);
+#ifdef DEBUG
+    DBG(CPU, "PC=%04X  %s  " DBG_REGS_FMT, dbg_pc, op_mnemonics[op], DBG_REGS_ARGS(c));
+#endif
     if(enable_ime_after){c->ime=1;c->ime_scheduled=0;}
     return main_cycles[op];
 }

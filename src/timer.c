@@ -1,5 +1,6 @@
 #include "timer.h"
 #include "interrupt.h"
+#include "dbg.h"
 
 static const int timer_bits[4] = { 9, 3, 5, 7 };
 
@@ -19,10 +20,10 @@ static void timer_increment_tima(mem_t *mem)
     u8 tima = (u8)(mem->io[0x05] + 1);
     if (tima == 0) {
         mem->io[0x05] = mem->io[0x06];
+        DBG(TIMER, "TIMA overflow → TMA=%02X", mem->io[0x06]);
         interrupt_request(mem, INT_TIMER);
         return;
     }
-
     mem->io[0x05] = tima;
 }
 
@@ -41,22 +42,19 @@ void timer_init(timer_t *timer)
 void timer_write_div(timer_t *timer, mem_t *mem)
 {
     bool old_signal = timer_signal(timer, mem);
-
     timer->div_counter = 0;
     mem->io[0x04] = 0;
-
+    DBG(TIMER, "DIV write  TAC=%d DIV=%02X div_cnt=%04X", mem->io[0x07] & 0x07, mem->io[0x04], timer->div_counter);
     timer_apply_falling_edge(mem, old_signal, timer_signal(timer, mem));
 }
 
 void timer_write_tac(timer_t *timer, mem_t *mem, u8 value)
 {
     bool old_signal = timer_signal(timer, mem);
-
     mem->io[0x07] = value & 0x07;
-
+    DBG(TIMER, "TAC write %02X -> TAC=%d TIMA=%02X TMA=%02X", value, mem->io[0x07] & 0x07, mem->io[0x05], mem->io[0x06]);
     timer_apply_falling_edge(mem, old_signal, timer_signal(timer, mem));
 }
-
 void timer_tick(timer_t *timer, mem_t *mem, int cycles)
 {
     for (int i = 0; i < cycles; i++) {
