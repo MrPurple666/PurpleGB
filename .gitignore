@@ -1,6 +1,10 @@
 purplegb
+purplegb-debug
 *.o
 *.gb
 *.gbc
+*.log
+*.txt
 references/
 tests/
+obj/

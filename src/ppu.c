@@ -230,21 +230,20 @@ void ppu_tick(ppu_t *ppu, mem_t *mem, int cycles)
         for (int i = 0; i < LCD_WIDTH * LCD_HEIGHT; i++)
             ppu->framebuffer[i] = 0xFFFFFFFF;
         mem->io[0x44] = 0; // LY
+        DBG(PPU, "LCD off  LY=0 mode=0");
         return;
     }
-
     ppu->cycles += cycles;
-
     if (ppu->ly < LCD_HEIGHT) {
         // Visible scanlines
         if (ppu->cycles >= CYCLES_PER_SCANLINE) {
             ppu->cycles -= CYCLES_PER_SCANLINE;
             ppu->ly++;
             mem->io[0x44] = ppu->ly;
-
             if (ppu->ly == LCD_HEIGHT) {
                 // Enter VBlank
                 ppu->mode = PPU_MODE_VBLANK;
+                DBG(PPU, "VBlank  LY=%d", ppu->ly);
                 update_stat(ppu, mem);
                 interrupt_request(mem, INT_VBLANK);
                 ppu->window_line = 0;
@@ -273,12 +272,12 @@ void ppu_tick(ppu_t *ppu, mem_t *mem, int cycles)
             ppu->cycles -= CYCLES_PER_SCANLINE;
             ppu->ly++;
             mem->io[0x44] = ppu->ly;
-
             if (ppu->ly >= SCANLINES_TOTAL) {
                 // Start new frame
                 ppu->ly = 0;
                 mem->io[0x44] = 0;
                 ppu->mode = PPU_MODE_OAM;
+                DBG(PPU, "Frame  LY=0 mode=OAM");
                 update_stat(ppu, mem);
             } else {
                 // Still in VBlank

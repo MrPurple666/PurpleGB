@@ -1,6 +1,7 @@
 #include "memory.h"
 #include "joypad.h"
 #include "timer.h"
+#include "dbg.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -38,7 +39,8 @@ void mem_init(mem_t *m) {
     m->io[0x44] = 0x00; m->io[0x45] = 0x00;
     m->io[0x47] = 0xFC; m->io[0x48] = 0xFF;
     m->io[0x49] = 0xFF; m->io[0x4A] = 0x00;
-    m->io[0x4B] = 0x00; m->ie = 0x00;
+    m->dma_src = 0;
+    m->dma_remaining = 0;
 }
 
 static int mbc(u8 t) {
@@ -104,7 +106,7 @@ static void mbc_write(mem_t *m, u16 a, u8 v) {
 }
 
 u8 mem_read(mem_t *m, u16 a) {
-    if (m->boot_on && a < 0x0100) return bootix_dmg[a];
+    if (m->boot_on && a < 0x0100) { DBG(MEM, "R %04X (bootrom) = %02X", a, bootix_dmg[a]); return bootix_dmg[a]; }
     if (a < 0x4000) return m->rom[a];
     if (a < 0x8000) return m->rom[m->mbc_rom_bank * ROM_BANK_SIZE + (a - 0x4000)];
     if (a < 0xA000) return m->vram[a & 0x1FFF];
@@ -112,20 +114,27 @@ u8 mem_read(mem_t *m, u16 a) {
     if (a < 0xD000) return m->wram[a & 0x0FFF];
     if (a < 0xE000) return m->wram[0x1000 + (a & 0x0FFF)];
     if (a < 0xFE00) return m->wram[a & 0x1FFF];
-    if (a < 0xFEA0) return m->oam[a & 0xFF];
+    if (a < 0xFEA0) {
+        if (m->dma_remaining > 0) { DBG(MEM, "R %04X (OAM blocked by DMA)", a); return 0xFF; }
+        return m->oam[a & 0xFF];
+    }
     if (a < 0xFF00) return 0xFF;
     if (a < 0xFF80) {
         if (a == 0xFF00 && m->joypad) return joypad_read((joypad_t*)m->joypad);
-        return m->io[a & 0x7F];
+        u8 v = m->io[a & 0x7F];
+        DBG(MEM, "R %04X = %02X", a, v);
+        return v;
     }
     if (a < 0xFFFF) return m->hram[a & 0x7F];
+    DBG(MEM, "R %04X (IE) = %02X", a, m->ie);
     return m->ie;
 }
 
 void mem_write(mem_t *m, u16 a, u8 v) {
     if (a < 0x8000) { mbc_write(m, a, v); return; }
-    if (a < 0xA000) { m->vram[a & 0x1FFF] = v; return; }
+    if (a < 0xA000) { m->vram[a & 0x1FFF] = v; DBG(MEM, "W %04X (VRAM) = %02X", a, v); return; }
     if (a < 0xC000) { if (m->mbc_ram_enable && m->eram && m->ram_banks > 0) m->eram[m->mbc_ram_bank * 0x2000 + (a & 0x1FFF)] = v; return; }
+    if (a >= 0xFE00 && a < 0xFEA0 && m->dma_remaining > 0) { DBG(MEM, "W %04X (OAM blocked by DMA)", a); return; }
     if (a < 0xD000) { m->wram[a & 0x0FFF] = v; return; }
     if (a < 0xE000) { m->wram[0x1000 + (a & 0x0FFF)] = v; return; }
     if (a < 0xFE00) { m->wram[a & 0x1FFF] = v; return; }
@@ -133,63 +142,58 @@ void mem_write(mem_t *m, u16 a, u8 v) {
     if (a < 0xFF00) return;
     if (a < 0xFF80) {
         u8 r = a & 0x7F;
-        switch (r) {
-            case 0x00: {
-                u8 sel = v & 0x30;
-                m->io[0x00] = sel;
-                if (m->joypad) {
-                    joypad_t *jp = (joypad_t *)m->joypad;
-                    jp->select_buttons = !(sel & 0x20);
-                    jp->select_dpad = !(sel & 0x10);
-                }
-                break;
+        if (r == 0x00) {
+            u8 sel = v & 0x30;
+            m->io[0x00] = sel;
+            DBG(MEM, "W FF00 = %02X (sel=%s%s)", v, (sel & 0x20) ? "" : "buttons ", (sel & 0x10) ? "" : "dpad ");
+            if (m->joypad) {
+                joypad_t *jp = (joypad_t *)m->joypad;
+                jp->select_buttons = !(sel & 0x20);
+                jp->select_dpad = !(sel & 0x10);
             }
-            case 0x01: m->io[0x01] = v; break;
-            case 0x02: m->io[0x02] = v; break;
-            case 0x04:
-                m->io[0x04] = 0;
-                if (m->timer) ((timer_t*)m->timer)->div_counter = 0;
-                break;
-            case 0x05: m->io[0x05] = v; break;
-            case 0x06: m->io[0x06] = v; break;
-            case 0x07: m->io[0x07] = v & 0x07; break;
-            case 0x0F: m->io[0x0F] = v & 0x1F; break;
-            case 0x40: m->io[0x40] = v; break;
-            case 0x41: case 0x42: case 0x43:
-            case 0x45: case 0x47: case 0x48: case 0x49:
-            case 0x4A: case 0x4B:
-                m->io[r] = v;
-                break;
-            case 0x46: {
-                m->io[0x46] = v;
-                u16 src = (u16)v << 8;
-                for (int i = 0; i < 0xA0; i++)
-                    m->oam[i] = mem_read(m, src + i);
-                break;
-            }
-            case 0x50: m->boot_on = false; m->io[0x50] = v; break;
-            case 0x10: case 0x11: case 0x12: case 0x13: case 0x14:
-            case 0x16: case 0x17: case 0x18: case 0x19:
-            case 0x1A: case 0x1B: case 0x1C: case 0x1D: case 0x1E:
-            case 0x20: case 0x21: case 0x22: case 0x23:
-            case 0x24: case 0x25: case 0x26:
-            case 0x30: case 0x31: case 0x32: case 0x33:
-            case 0x34: case 0x35: case 0x36: case 0x37:
-            case 0x38: case 0x39: case 0x3A: case 0x3B:
-            case 0x3C: case 0x3D: case 0x3E: case 0x3F:
-                m->io[r] = v; break;
-            default: m->io[r] = v; break;
+            return;
         }
+        if (r == 0x01) { m->io[0x01] = v; DBG(MEM, "W FF01 (SB) = %02X", v); return; }
+        if (r == 0x02) { m->io[0x02] = v; DBG(MEM, "W FF02 (SC) = %02X", v); return; }
+        if (r == 0x04) { if (m->timer) { timer_write_div((timer_t *)m->timer, m); } else { m->io[0x04] = 0; } return; }
+        if (r == 0x05) { m->io[0x05] = v; DBG(TIMER, "TIMA write = %02X", v); return; }
+        if (r == 0x06) { m->io[0x06] = v; DBG(TIMER, "TMA write = %02X", v); return; }
+        if (r == 0x07) { if (m->timer) { timer_write_tac((timer_t *)m->timer, m, v); } else { m->io[0x07] = v & 0x07; } return; }
+        if (r == 0x0F) { m->io[0x0F] = v & 0x1F; DBG(INT, "IF write %02X (old %02X)", v, m->io[r]); return; }
+        if (r == 0x40) { DBG(PPU, "LCDC write %02X", v); m->io[0x40] = v; return; }
+        if (r == 0x41) { DBG(PPU, "STAT write %02X (old %02X)", v, m->io[0x41]); m->io[0x41] = v; return; }
+        if (r == 0x42 || r == 0x43 || r == 0x45 || r == 0x4A || r == 0x4B) { m->io[r] = v; return; }
+        if (r == 0x46) {
+            m->io[0x46] = v;
+            m->dma_src = v;
+            m->dma_remaining = 0xA0;
+            DBG(DMA, "START src=%02X00 dst=FE00 len=A0", v);
+            return;
+        }
+        if (r == 0x47 || r == 0x48 || r == 0x49) { m->io[r] = v; return; }
+        if (r == 0x50) { DBG(PPU, "Boot ROM disable write %02X", v); m->boot_on = false; m->io[0x50] = v; return; }
+        /* Other IO registers (audio, etc.) */
+        if ((r >= 0x10 && r <= 0x3F) || r >= 0x4C) { m->io[r] = v; return; }
         return;
     }
-    if (a < 0xFFFF) {
-        u8 idx = a & 0x7F;
-        u8 wv = v;
-        if (idx == 0) wv = v & 0xF0; // prevent re-init trigger
-        m->hram[idx] = wv; return;
-    }
+    if (a < 0xFFFF) { m->hram[a & 0x7F] = v; return; }
+    DBG(INT, "IE write %02X (old %02X)", v, m->ie);
     m->ie = v;
 }
 
 void mem_write16(mem_t *m, u16 a, u16 v) { mem_write(m, a, v & 0xFF); mem_write(m, a+1, v >> 8); }
 
+void mem_dma_tick(mem_t *m, int cycles)
+{
+    if (m->dma_remaining <= 0) return;
+    int idx = 0xA0 - m->dma_remaining;
+    for (int i = 0; i < cycles && m->dma_remaining > 0; i++) {
+        if ((i & 3) == 0) {
+            u16 src = ((u16)m->dma_src << 8) + idx;
+            m->oam[idx] = mem_read(m, src);
+            idx++;
+            m->dma_remaining--;
+        }
+    }
+    DBG(DMA, "DONE %d bytes transferred", idx);
+}

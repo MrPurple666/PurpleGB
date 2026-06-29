@@ -34,6 +34,8 @@ typedef struct {
     bool mbc_ram_enable;
     int mbc_rom_bank, mbc_ram_bank, mbc_mode;
     bool boot_on;
+    u8 dma_src;
+    int dma_remaining;
     void *joypad, *timer;
 } mem_t;
 
@@ -42,5 +44,6 @@ bool mem_load_rom(mem_t *m, const char *p);
 u8   mem_read(mem_t *m, u16 a);
 void mem_write(mem_t *m, u16 a, u8 v);
 void mem_write16(mem_t *m, u16 a, u16 v);
+void mem_dma_tick(mem_t *m, int cycles);
 
 #endif
