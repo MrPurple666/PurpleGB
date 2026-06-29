@@ -44,8 +44,8 @@ int  cpu_service_interrupt(cpu_t *cpu, mem_t *mem);
 typedef void (*op_fn)(cpu_t *cpu, mem_t *mem);
 extern op_fn  main_opcodes[256];
 extern op_fn  cb_opcodes[256];
-extern const u8 main_cycles[256];
-extern const u8 cb_cycles[256];
+extern const u16 main_cycles[256];
+extern const u16 cb_cycles[256];
 void cpu_init_opcodes(void);
 
 #endif

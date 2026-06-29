@@ -11,12 +11,17 @@ typedef struct {
     int mode;
     int cycles;
     int stat_signal;
+    int mode3_length;   /* Variable Mode 3 duration (T-cycles) */
+    bool lcd_was_on;    /* For one-shot LCD-off clear */
     u8 line_buf[LCD_WIDTH];
     u8 bg_color_buf[LCD_WIDTH];
     u8 window_line;
     u8 ly;
+    u32 cgb_bg_palettes[8][4];   /* CGB BG palette colors (8 palettes x 4 colors) */
+    u32 cgb_obj_palettes[8][4];  /* CGB OBJ palette colors (8 palettes x 4 colors) */
 } ppu_t;
 
+void ppu_decode_cgb_palettes(ppu_t *ppu, mem_t *mem);
 void ppu_init(ppu_t *ppu);
 void ppu_tick(ppu_t *ppu, mem_t *mem, int cycles);
 

@@ -1,26 +1,39 @@
 # PurpleGB
 
-PurpleGB is a small Game Boy emulator written in C99 with SDL3. It is a learning project: compact, direct, and focused on making real ROMs boot far enough to expose CPU, memory, PPU, timer, interrupt, joypad, and mapper bugs.
+PurpleGB is a small Game Boy / Game Boy Color emulator written in C99 with SDL3. It is a learning project: compact, direct, and focused on making real ROMs boot far enough to expose CPU, memory, PPU, timer, interrupt, joypad, and mapper bugs.
 
 ## Status
 
-Works well enough to boot and run some DMG ROMs, including Tetris in the current test setup. It is not a cycle-perfect emulator and not a polished end-user application yet.
+Works well enough to boot and run DMG and CGB ROMs, including Tetris, Pokemon Green, and many others. It is not a cycle-perfect emulator and not a polished end-user application yet.
 
 Implemented or partially implemented:
 
 - SM83 CPU opcode dispatch, including CB-prefixed opcodes
+- T-cycle accurate timing (cycle tables, interrupt handling, HALT/STOP)
 - Memory bus with ROM, VRAM, WRAM, OAM, HRAM, I/O, and IE handling
-- MBC1, MBC3, and MBC5 cartridge banking basics
+- MBC1, MBC3, and MBC5 cartridge banking
 - Embedded Bootix DMG boot ROM path
 - Scanline PPU for BG, window, and sprites
-- DIV/TIMA/TMA/TAC timer
-- VBlank, STAT, timer, serial, and joypad interrupt plumbing
+- Variable Mode 3 timing (sprite count + SCX fine scroll)
+- One-shot LCD off/on state handling
+- CGB detection, VRAM banking, WRAM banking
+- CGB BG/OBJ palette registers (BCPS/BCPD/OCPS/OCPD)
+- CGB BG attribute map (palette, flip, VRAM bank, priority)
+- CGB OBJ attributes (palette, VRAM bank)
+- DIV/TIMA/TMA/TAC timer with falling-edge accuracy
+- APU: 4 sound channels (square + sweep, square, wave, noise)
+- Frame sequencer, length/envelope/sweep counters
+- NR10-NR52 register read/write
+- SDL3 audio output (44100 Hz stereo)
+- Battery-backed SRAM persistence (.sav load/save)
+- VBlank, STAT, timer, and joypad interrupt plumbing
 - SDL3 window, rendering, keyboard input, drag-and-drop ROM loading, pause overlay, and FPS title
 
 Known rough edges:
 
-- Graphics are still approximate in places
-- Audio is not currently implemented
+- Graphics are still approximate in places (sprite 0 hit not implemented)
+- HDMA/GDMA registers stored but transfers not executed
+- Double-speed mode registers stored but not applied
 - Accuracy is good enough for debugging, not for compatibility claims
 
 ## Requirements
@@ -87,7 +100,8 @@ You can also drag and drop a `.gb` or `.gbc` file onto the window.
 src/
   cpu.c/.h       SM83 CPU core and opcode tables
   memory.c/.h    cartridge loading, boot ROM, bus, MBC, I/O
-  ppu.c/.h       scanline LCD renderer
+  ppu.c/.h       scanline LCD renderer (DMG + CGB)
+  apu.c/.h       4-channel APU (square, wave, noise)
   timer.c/.h     DIV/TIMA timer
   joypad.c/.h    P1 register and SDL keyboard input
   interrupt.h    interrupt bit definitions/helpers

@@ -10,20 +10,22 @@
 #include "interrupt.h"
 #include "ppu.h"
 #include "dbg.h"
+#include "apu.h"
 
 uint32_t dbg_mask;
 
 typedef struct {
-    mem_t mem; cpu_t cpu; timer_t timer; joypad_t joypad; ppu_t ppu;
+    mem_t mem; cpu_t cpu; timer_t timer; joypad_t joypad; ppu_t ppu; apu_t apu;
     SDL_Window *w; SDL_Renderer *r; SDL_Texture *t;
+    SDL_AudioStream *audio;
     bool rom_loaded, quit, paused;
     int menu_sel; u32 fc, fps_ts;
 } gb_t;
 
-static void re(gb_t*g){mem_init(&g->mem);cpu_init(&g->cpu);timer_init(&g->timer);joypad_init(&g->joypad);ppu_init(&g->ppu);g->paused=0;}
+static void re(gb_t*g){mem_init(&g->mem);cpu_init(&g->cpu);timer_init(&g->timer);joypad_init(&g->joypad);ppu_init(&g->ppu);apu_init(&g->apu);g->paused=0;}
 
 static void lr(gb_t*g,const char*p){
-    re(g);g->mem.joypad=&g->joypad;g->mem.timer=&g->timer;
+    re(g);g->mem.joypad=&g->joypad;g->mem.timer=&g->timer;g->mem.apu=&g->apu;
     g->mem.hram[0x36]=0xC9;
     if(!mem_load_rom(&g->mem,p))return;
     g->mem.boot_on=1;cpu_init_boot(&g->cpu);
@@ -34,14 +36,18 @@ static void rc(void*u,const char*const*fl,int fi){(void)fi;if(fl&&fl[0])lr((gb_t
 
 int main(int argc,char**argv){
     gb_t gb={0};
-    cpu_init_opcodes();re(&gb);gb.mem.joypad=&gb.joypad;gb.mem.timer=&gb.timer;dbg_init();
-    if(!SDL_Init(SDL_INIT_VIDEO))return 1;
+    cpu_init_opcodes();re(&gb);gb.mem.joypad=&gb.joypad;gb.mem.timer=&gb.timer;gb.mem.apu=&gb.apu;dbg_init();
+    if(!SDL_Init(SDL_INIT_VIDEO|SDL_INIT_AUDIO))return 1;
     gb.w=SDL_CreateWindow("PurpleGB",480,432,SDL_WINDOW_RESIZABLE);
     if(!gb.w){SDL_Quit();return 1;}
     gb.r=SDL_CreateRenderer(gb.w,NULL);
     if(!gb.r){SDL_DestroyWindow(gb.w);SDL_Quit();return 1;}
     gb.t=SDL_CreateTexture(gb.r,SDL_PIXELFORMAT_ARGB8888,SDL_TEXTUREACCESS_STREAMING,160,144);
     if(!gb.t){SDL_DestroyRenderer(gb.r);SDL_DestroyWindow(gb.w);SDL_Quit();return 1;}
+    /* Set up SDL audio stream for APU output */
+    SDL_AudioSpec spec={SDL_AUDIO_S16LE,2,44100};
+    gb.audio=SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,&spec,NULL,NULL);
+    if(gb.audio)SDL_ResumeAudioStreamDevice(gb.audio);
 
     if(argc>1){lr(&gb,argv[1]);fprintf(stderr,"ROM loaded=%d title='%s'\\n",gb.rom_loaded,gb.mem.rom_title);}
     else{SDL_DialogFileFilter f={"Game Boy ROMs","gb;gbc"};SDL_ShowOpenFileDialog(rc,&gb,gb.w,&f,1,NULL,0);}
@@ -68,9 +74,10 @@ int main(int argc,char**argv){
             while(tc<70224){
                 int cy=cpu_step(&gb.cpu,&gb.mem);
                 mem_dma_tick(&gb.mem, cy);
-                ppu_tick(&gb.ppu,&gb.mem,cy);timer_tick(&gb.timer,&gb.mem,cy);tc+=cy;
+                ppu_tick(&gb.ppu,&gb.mem,cy);timer_tick(&gb.timer,&gb.mem,cy);apu_tick(&gb.apu,cy);tc+=cy;
             }
         }
+        if(gb.mem.cgb) ppu_decode_cgb_palettes(&gb.ppu,&gb.mem);
         if(gb.paused&&gb.rom_loaded){
             u32*fb=gb.ppu.framebuffer;
             for(int y=0;y<144;y++)for(int x=0;x<160;x++){u32 c=fb[y*160+x];fb[y*160+x]=0xFF000000|((u32)(((c>>16)&0xFF)*0.5f))<<16|((u32)(((c>>8)&0xFF)*0.5f))<<8|(u32)((c&0xFF)*0.5f);}
@@ -78,10 +85,16 @@ int main(int argc,char**argv){
         }
         SDL_UpdateTexture(gb.t,NULL,gb.ppu.framebuffer,160*4);
         SDL_RenderTexture(gb.r,gb.t,NULL,NULL);SDL_RenderPresent(gb.r);
+        /* Push APU audio samples to SDL stream */
+        if(gb.audio){
+            s16 buf[4096];
+            int n=apu_get_samples(&gb.apu,buf,4096);
+            if(n>0)SDL_PutAudioStreamData(gb.audio,buf,n*sizeof(s16));
+        }
         gb.fc++; u32 nw = SDL_GetTicks();
         if(nw-gb.fps_ts>=1000){char t[128];snprintf(t,sizeof(t),"PurpleGB — %s [%u FPS]",gb.rom_loaded?gb.mem.rom_title:"(no ROM)",gb.fc);SDL_SetWindowTitle(gb.w,t);gb.fps_ts=nw;gb.fc=0;}
         u32 el=SDL_GetTicks()-fs;if(el<16)SDL_Delay(16-el);
     }
-    SDL_DestroyTexture(gb.t);SDL_DestroyRenderer(gb.r);SDL_DestroyWindow(gb.w);
-    SDL_Quit();free(gb.mem.rom);free(gb.mem.eram);return 0;
+    SDL_DestroyAudioStream(gb.audio);SDL_DestroyTexture(gb.t);SDL_DestroyRenderer(gb.r);SDL_DestroyWindow(gb.w);
+    SDL_Quit();mem_save_sram(&gb.mem);apu_cleanup(&gb.apu);free(gb.mem.rom);free(gb.mem.eram);return 0;
 }

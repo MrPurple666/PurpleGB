@@ -1,6 +1,7 @@
 #include "memory.h"
 #include "joypad.h"
 #include "timer.h"
+#include "apu.h"
 #include "dbg.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -41,8 +42,28 @@ void mem_init(mem_t *m) {
     m->io[0x49] = 0xFF; m->io[0x4A] = 0x00;
     m->dma_src = 0;
     m->dma_remaining = 0;
+    m->cgb = false;
+    m->cgb_vbk = 0;
+    m->cgb_svbk = 1;
+    memset(m->bg_palette, 0xFF, sizeof(m->bg_palette));
+    memset(m->obj_palette, 0xFF, sizeof(m->obj_palette));
+    m->cgb_bcps = 0;
+    m->cgb_ocps = 0;
+    m->cgb_hdma5 = 0xFF;
+    m->cgb_hdma_src = 0;
+    m->cgb_hdma_dst = 0;
+    m->cgb_hdma_active = false;
+    m->cgb_key1 = 0;
 }
 
+static bool is_battery_cart(u8 cart_type) {
+    switch (cart_type) {
+        case 0x03: case 0x06: case 0x09: case 0x0D:
+        case 0x13: case 0x1B: case 0x1E: case 0x22: case 0xFF:
+            return true;
+        default: return false;
+    }
+}
 static int mbc(u8 t) {
     switch(t) {
         case 0x00: return MBC_NONE;
@@ -65,6 +86,8 @@ bool mem_load_rom(mem_t *m, const char *p) {
     for (int i = 0; i < 16 && h[i+0x34] >= 0x20 && h[i+0x34] < 0x7F; i++)
         m->rom_title[i] = h[i+0x34];
     m->mbc_type = mbc(h[0x47]);
+    m->cgb = (h[0x43] & 0x80) != 0;
+    m->battery_backed = is_battery_cart(h[0x47]);
     m->rom_banks = h[0x48] <= 8 ? (1 << (h[0x48] + 1)) : 512;
     m->ram_banks = h[0x49] <= 4 ? (1 << (h[0x49] + 2)) : 0;
     if (m->ram_banks < 1) m->ram_banks = 0;
@@ -76,6 +99,18 @@ bool mem_load_rom(mem_t *m, const char *p) {
     if (m->ram_banks > 0)
         m->eram = calloc(1, m->ram_banks * 0x2000);
     m->mbc_rom_bank = 1; m->mbc_ram_bank = 0; m->mbc_mode = 0; m->mbc_ram_enable = false;
+    /* Build .sav path and load SRAM if battery-backed */
+    snprintf(m->sav_path, sizeof(m->sav_path), "%s", p);
+    size_t len = strlen(m->sav_path);
+    if (len >= 4) strcpy(m->sav_path + len - 4, ".sav");
+    if (m->battery_backed && m->eram && m->ram_banks > 0) {
+        FILE *sf = fopen(m->sav_path, "rb");
+        if (sf) {
+            fread(m->eram, 1, m->ram_banks * 0x2000, sf);
+            fclose(sf);
+            fprintf(stderr, "Loaded SRAM: %s\n", m->sav_path);
+        }
+    }
     return true;
 }
 
@@ -109,11 +144,11 @@ u8 mem_read(mem_t *m, u16 a) {
     if (m->boot_on && a < 0x0100) { DBG(MEM, "R %04X (bootrom) = %02X", a, bootix_dmg[a]); return bootix_dmg[a]; }
     if (a < 0x4000) return m->rom[a];
     if (a < 0x8000) return m->rom[m->mbc_rom_bank * ROM_BANK_SIZE + (a - 0x4000)];
-    if (a < 0xA000) return m->vram[a & 0x1FFF];
+    if (a < 0xA000) return m->vram_banks[m->cgb ? (m->cgb_vbk & 1) : 0][a & 0x1FFF];
     if (a < 0xC000) { if (m->mbc_ram_enable && m->eram && m->ram_banks > 0) return m->eram[m->mbc_ram_bank * 0x2000 + (a & 0x1FFF)]; return 0xFF; }
-    if (a < 0xD000) return m->wram[a & 0x0FFF];
-    if (a < 0xE000) return m->wram[0x1000 + (a & 0x0FFF)];
-    if (a < 0xFE00) return m->wram[a & 0x1FFF];
+    if (a < 0xD000) return m->wram_banks[0][a & 0x0FFF];
+    if (a < 0xE000) return m->wram_banks[m->cgb ? (m->cgb_svbk & 7) : 1][a & 0x0FFF];
+    if (a < 0xFE00) { u16 m2 = a - 0x2000; return m->wram_banks[m2 < 0xD000 ? 0 : (m->cgb ? (m->cgb_svbk & 7) : 1)][m2 & 0x0FFF]; }
     if (a < 0xFEA0) {
         if (m->dma_remaining > 0) { DBG(MEM, "R %04X (OAM blocked by DMA)", a); return 0xFF; }
         return m->oam[a & 0xFF];
@@ -121,6 +156,18 @@ u8 mem_read(mem_t *m, u16 a) {
     if (a < 0xFF00) return 0xFF;
     if (a < 0xFF80) {
         if (a == 0xFF00 && m->joypad) return joypad_read((joypad_t*)m->joypad);
+        if (a >= 0xFF10 && a <= 0xFF3F && m->apu) return apu_read((apu_t*)m->apu, a);
+        if (m->cgb) {
+            u8 r = a & 0x7F;
+            if (r == 0x4D) return m->cgb_key1 | 0x7E; /* KEY1 */
+            if (r == 0x4F) return m->cgb_vbk | 0xFE; /* VBK */
+            if (r == 0x55) return m->cgb_hdma5;       /* HDMA5 */
+            if (r == 0x68) return m->cgb_bcps | 0x40; /* BCPS */
+            if (r == 0x69) return m->bg_palette[m->cgb_bcps & 0x3F]; /* BCPD */
+            if (r == 0x6A) return m->cgb_ocps | 0x40; /* OCPS */
+            if (r == 0x6B) return m->obj_palette[m->cgb_ocps & 0x3F]; /* OCPD */
+            if (r == 0x70) return m->cgb_svbk | 0xF8; /* SVBK */
+        }
         u8 v = m->io[a & 0x7F];
         DBG(MEM, "R %04X = %02X", a, v);
         return v;
@@ -132,12 +179,12 @@ u8 mem_read(mem_t *m, u16 a) {
 
 void mem_write(mem_t *m, u16 a, u8 v) {
     if (a < 0x8000) { mbc_write(m, a, v); return; }
-    if (a < 0xA000) { m->vram[a & 0x1FFF] = v; DBG(MEM, "W %04X (VRAM) = %02X", a, v); return; }
+    if (a < 0xA000) { m->vram_banks[m->cgb ? (m->cgb_vbk & 1) : 0][a & 0x1FFF] = v; return; }
     if (a < 0xC000) { if (m->mbc_ram_enable && m->eram && m->ram_banks > 0) m->eram[m->mbc_ram_bank * 0x2000 + (a & 0x1FFF)] = v; return; }
     if (a >= 0xFE00 && a < 0xFEA0 && m->dma_remaining > 0) { DBG(MEM, "W %04X (OAM blocked by DMA)", a); return; }
-    if (a < 0xD000) { m->wram[a & 0x0FFF] = v; return; }
-    if (a < 0xE000) { m->wram[0x1000 + (a & 0x0FFF)] = v; return; }
-    if (a < 0xFE00) { m->wram[a & 0x1FFF] = v; return; }
+    if (a < 0xD000) { m->wram_banks[0][a & 0x0FFF] = v; return; }
+    if (a < 0xE000) { m->wram_banks[(m->cgb ? ((m->cgb_svbk & 7) ? (m->cgb_svbk & 7) : 1) : 1)][a & 0x0FFF] = v; return; }
+    if (a < 0xFE00) { u16 m2 = a - 0x2000; m->wram_banks[m2 < 0xD000 ? 0 : (m->cgb ? ((m->cgb_svbk & 7) ? (m->cgb_svbk & 7) : 1) : 1)][m2 & 0x0FFF] = v; return; }
     if (a < 0xFEA0) { m->oam[a & 0xFF] = v; return; }
     if (a < 0xFF00) return;
     if (a < 0xFF80) {
@@ -172,8 +219,35 @@ void mem_write(mem_t *m, u16 a, u8 v) {
         }
         if (r == 0x47 || r == 0x48 || r == 0x49) { m->io[r] = v; return; }
         if (r == 0x50) { DBG(PPU, "Boot ROM disable write %02X", v); m->boot_on = false; m->io[0x50] = v; return; }
+        if (m->cgb) {
+            if (r == 0x4D) { m->cgb_key1 = (m->cgb_key1 & 0x80) | (v & 0x01); return; }
+            if (r == 0x4F) { m->cgb_vbk = v & 1; return; }
+            if (r == 0x51) { m->cgb_hdma_src = (m->cgb_hdma_src & 0xFF00) | ((u16)v << 8); return; }
+            if (r == 0x52) { m->cgb_hdma_src = (m->cgb_hdma_src & 0xFF00) | (v & 0xF0); return; }
+            if (r == 0x53) { m->cgb_hdma_dst = (m->cgb_hdma_dst & 0xFF00) | ((u16)(v & 0x1F) << 8); return; }
+            if (r == 0x54) { m->cgb_hdma_dst = (m->cgb_hdma_dst & 0xFF00) | (v & 0xF0); return; }
+            if (r == 0x55) {
+                m->cgb_hdma5 = v;
+                m->cgb_hdma_active = true;
+                return;
+            }
+            if (r == 0x68) { m->cgb_bcps = v; return; }
+            if (r == 0x69) {
+                m->bg_palette[m->cgb_bcps & 0x3F] = v;
+                if (m->cgb_bcps & 0x80) m->cgb_bcps = (m->cgb_bcps & 0xC0) | ((m->cgb_bcps + 1) & 0x3F);
+                return;
+            }
+            if (r == 0x6A) { m->cgb_ocps = v; return; }
+            if (r == 0x6B) {
+                m->obj_palette[m->cgb_ocps & 0x3F] = v;
+                if (m->cgb_ocps & 0x80) m->cgb_ocps = (m->cgb_ocps & 0xC0) | ((m->cgb_ocps + 1) & 0x3F);
+                return;
+            }
+            if (r == 0x70) { m->cgb_svbk = v & 7; return; }
+        }
         /* Other IO registers (audio, etc.) */
-        if ((r >= 0x10 && r <= 0x3F) || r >= 0x4C) { m->io[r] = v; return; }
+        if (r >= 0x10 && r <= 0x3F && m->apu) { apu_write((apu_t*)m->apu, a, v); m->io[r] = v; return; }
+        if (r >= 0x4C) { m->io[r] = v; return; }
         return;
     }
     if (a < 0xFFFF) { m->hram[a & 0x7F] = v; return; }
@@ -196,4 +270,13 @@ void mem_dma_tick(mem_t *m, int cycles)
         }
     }
     DBG(DMA, "DONE %d bytes transferred", idx);
+}
+
+void mem_save_sram(mem_t *m) {
+    if (!m->battery_backed || !m->eram || m->ram_banks <= 0) return;
+    FILE *f = fopen(m->sav_path, "wb");
+    if (!f) { fprintf(stderr, "Failed to save SRAM: %s\n", m->sav_path); return; }
+    fwrite(m->eram, 1, m->ram_banks * 0x2000, f);
+    fclose(f);
+    fprintf(stderr, "Saved SRAM: %s\n", m->sav_path);
 }
