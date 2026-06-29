@@ -37,6 +37,7 @@ static inline bool cpu_get_h(cpu_t *c) { return (c->f & FLAG_H) != 0; }
 static inline bool cpu_get_c(cpu_t *c) { return (c->f & FLAG_C) != 0; }
 
 void cpu_init(cpu_t *cpu);
+void cpu_init_boot(cpu_t *cpu);
 int  cpu_step(cpu_t *cpu, mem_t *mem);
 int  cpu_service_interrupt(cpu_t *cpu, mem_t *mem);
 

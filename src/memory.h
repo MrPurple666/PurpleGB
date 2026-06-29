@@ -33,6 +33,7 @@ typedef struct {
     char rom_title[17];
     bool mbc_ram_enable;
     int mbc_rom_bank, mbc_ram_bank, mbc_mode;
+    bool boot_on;
     void *joypad, *timer;
 } mem_t;
 

@@ -23,6 +23,7 @@ static void lr(gb_t*g,const char*p){
     re(g);g->mem.joypad=&g->joypad;g->mem.timer=&g->timer;
     g->mem.hram[0x36]=0xC9;
     if(!mem_load_rom(&g->mem,p))return;
+    g->mem.boot_on=1;cpu_init_boot(&g->cpu);
     g->rom_loaded=1;
 }
 

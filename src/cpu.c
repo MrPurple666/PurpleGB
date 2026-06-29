@@ -17,6 +17,7 @@ static inline void sr(cpu_t*c,mem_t*m,int r,u8 v){
 }
 
 void cpu_init(cpu_t*c){memset(c,0,sizeof(*c));cpu_set_af(c,0x01B0);cpu_set_bc(c,0x0013);cpu_set_de(c,0x00D8);cpu_set_hl(c,0x014D);c->sp=0xFFFE;c->pc=0x0100;}
+void cpu_init_boot(cpu_t*c){memset(c,0,sizeof(*c));c->c=0x14;}
 int cpu_service_interrupt(cpu_t*c,mem_t*m){u8 p=interrupt_get_pending(m);if(!p)return 0;int b=0;while(!(p&1)){b++;p>>=1;}c->ime=0;c->halted=0;c->sp-=2;mem_write16(m,c->sp,c->pc);c->pc=0x40+(b<<3);m->io[0x0F]&=~(1<<b);return 20;}
 int cpu_step(cpu_t*c,mem_t*m){
     if(c->halt_bug){if(c->pc)c->pc--;c->halt_bug=0;}

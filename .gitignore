@@ -3,3 +3,4 @@ purplegb
 *.gb
 *.gbc
 references/
+tests/
