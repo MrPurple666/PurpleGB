@@ -147,12 +147,21 @@ void mem_write(mem_t *m, u16 a, u8 v) {
             case 0x01: m->io[0x01] = v; break;
             case 0x02: m->io[0x02] = v; break;
             case 0x04:
-                m->io[0x04] = 0;
-                if (m->timer) ((timer_t*)m->timer)->div_counter = 0;
+                if (m->timer) {
+                    timer_write_div((timer_t *)m->timer, m);
+                } else {
+                    m->io[0x04] = 0;
+                }
                 break;
             case 0x05: m->io[0x05] = v; break;
             case 0x06: m->io[0x06] = v; break;
-            case 0x07: m->io[0x07] = v & 0x07; break;
+            case 0x07:
+                if (m->timer) {
+                    timer_write_tac((timer_t *)m->timer, m, v);
+                } else {
+                    m->io[0x07] = v & 0x07;
+                }
+                break;
             case 0x0F: m->io[0x0F] = v & 0x1F; break;
             case 0x40: m->io[0x40] = v; break;
             case 0x41: case 0x42: case 0x43:
