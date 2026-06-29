@@ -2,7 +2,6 @@
 #define PPU_H
 
 #include "memory.h"
-#include <SDL3/SDL.h>
 
 #define LCD_WIDTH  160
 #define LCD_HEIGHT 144
@@ -20,8 +19,5 @@ typedef struct {
 
 void ppu_init(ppu_t *ppu);
 void ppu_tick(ppu_t *ppu, mem_t *mem, int cycles);
-void ppu_render_frame(ppu_t *ppu, mem_t *mem);
-void ppu_write_reg(ppu_t *ppu, u8 reg, u8 val);
-u8   ppu_read_reg(ppu_t *ppu, u8 reg);
 
 #endif

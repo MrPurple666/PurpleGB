@@ -9,8 +9,8 @@
 #define INT_SERIAL 3
 #define INT_JOYPAD 4
 
-void interrupt_request(mem_t *mem, int bit);
-bool interrupt_pending(mem_t *mem);
-u8   interrupt_get_pending(mem_t *mem);
+static inline void interrupt_request(mem_t *mem, int bit) { mem->io[0x0F] |= (1 << bit); }
+static inline bool interrupt_pending(mem_t *mem) { return (mem->io[0x0F] & mem->ie & 0x1F) != 0; }
+static inline u8 interrupt_get_pending(mem_t *mem) { return mem->io[0x0F] & mem->ie & 0x1F; }
 
 #endif
