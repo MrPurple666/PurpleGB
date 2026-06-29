@@ -176,12 +176,7 @@ void mem_write(mem_t *m, u16 a, u8 v) {
         if ((r >= 0x10 && r <= 0x3F) || r >= 0x4C) { m->io[r] = v; return; }
         return;
     }
-    if (a < 0xFFFF) {
-        u8 idx = a & 0x7F;
-        u8 wv = v;
-        if (idx == 0) wv = v & 0xF0;
-        m->hram[idx] = wv; return;
-    }
+    if (a < 0xFFFF) { m->hram[a & 0x7F] = v; return; }
     DBG(INT, "IE write %02X (old %02X)", v, m->ie);
     m->ie = v;
 }
