@@ -144,28 +144,111 @@ static void sgb_pal_set(mem_t *m, const u8 *payload)
 static void seed_compat_palettes(mem_t *m)
 {
     if (m->cgb && !m->cart_cgb) {
-        static const u16 dmg_green[4] = { 0x5F60, 0x3A40, 0x1900, 0x0080 };
-        for (int i = 0; i < 4; i++) {
-            m->bg_palette[i * 2] = (u8)(dmg_green[i] & 0xFF);
-            m->bg_palette[i * 2 + 1] = (u8)(dmg_green[i] >> 8);
-            m->obj_palette[i * 2] = (u8)(dmg_green[i] & 0xFF);
-            m->obj_palette[i * 2 + 1] = (u8)(dmg_green[i] >> 8);
-            m->obj_palette[8 + i * 2] = (u8)(dmg_green[i] & 0xFF);
-            m->obj_palette[8 + i * 2 + 1] = (u8)(dmg_green[i] >> 8);
+
+    /* CGB boot ROM palette tables from SameBoy */
+    static const u8 title_checksums[77] = {
+        0x00,0x88,0x16,0x36,0xD1,0xDB,0xF2,0x3C,
+        0x8C,0x92,0x3D,0x5C,0x58,0xC9,0x3E,0x70,
+        0x1D,0x59,0x69,0x19,0x35,0xA8,0x14,0xAA,
+        0x75,0x95,0x99,0x34,0x6F,0x15,0xFF,0x97,
+        0x4B,0x90,0x17,0x10,0x39,0xF7,0xF6,0xA2,
+        0x49,0x4E,0x43,0x68,0xE0,0x8B,0xF0,0xCE,
+        0x0C,0x29,0xE8,0xB7,0x86,0x9A,0x52,0x01,
+        0x9D,0x71,0x9C,0xBD,0x5D,0x6D,0x67,0x3F,
+        0x6B,0xB3,0x46,0x28,0xA5,0xC6,0xD3,0x27,
+        0x61,0x18,0x66,0x6A,0xBF
+    };
+    static const u8 palette_index_ofs[93] = {
+         0, 4, 5,35,34, 3,31,15,10, 5,19,36, 7,37,30,44,
+        21,32,31,20, 5,33,13,14, 5,29, 5,18, 9, 3, 2,26,
+        25,25,41,42,26,45,42,45,36,38,26,42,30,41,34,34,
+         5,42, 6, 5,33,25,42,42, 2,16,25,42,42, 5, 0,39,
+        36,22,25, 6,32,12,36,11,39,18,39,24,31,50,17,46,
+         6,27,36,22,25, 6,32,12,36,11,39,18,39
+    };
+    static const u8 fourth_letter_rows[] = "BEFAARBEKEK R-URAR I N!IE LMGCS CT!RPEB!DE";
+    static const u8 combos[55][3] = {
+        { 4, 4,29},{18,18,18},{20,20,20},{24,24,24},{ 9, 9, 9},
+        { 0, 0, 0},{27,27,27},{ 5, 5, 5},{12,12,12},{26,26,26},
+        {16, 8, 8},{ 4,28,28},{ 4, 2, 2},{ 3, 4, 4},{ 4,29,29},
+        {28, 4,28},{ 2,17, 2},{16,16, 8},{ 4, 4, 7},{ 4, 4,18},
+        { 4, 4,20},{19,19, 9},{31,31,22},{17,17, 2},{ 4, 4, 2},
+        { 4, 4, 3},{28,28, 0},{ 3, 3, 0},{ 0, 0, 1},{18,22,18},
+        {20,22,20},{24,22,24},{16,22, 8},{17, 4,13},{27,16,14},
+        {27, 4,15},{25,31,18},{16,28,10},{ 4,23,28},{17,22, 2},
+        { 4, 0, 2},{ 4,28, 3},{28, 3, 0},{ 3,28, 4},{21,28, 4},
+        { 3,28, 0},{25, 3,28},{ 0,28, 8},{ 4, 3,28},{28, 3, 6},
+        { 4,28,29},{30,30,30},{31,31,31},{28, 4, 1},{ 0, 0, 2},
+    };
+    static const u16 palettes[32][4] = {
+        {0x7FFF,0x32BF,0x00D0,0x0000},{0x639F,0x4279,0x15B0,0x04CB},
+        {0x7FFF,0x6E31,0x454A,0x0000},{0x7FFF,0x1BEF,0x0200,0x0000},
+        {0x7FFF,0x421F,0x1CF2,0x0000},{0x7FFF,0x5294,0x294A,0x0000},
+        {0x7FFF,0x03FF,0x012F,0x0000},{0x7FFF,0x03EF,0x01D6,0x0000},
+        {0x7FFF,0x42B5,0x3DC8,0x0000},{0x7E74,0x03FF,0x0180,0x0000},
+        {0x67FF,0x77AC,0x1A13,0x2D6B},{0x7ED6,0x4BFF,0x2175,0x0000},
+        {0x53FF,0x4A5F,0x7E52,0x0000},{0x4FFF,0x7ED2,0x3A4C,0x1CE0},
+        {0x03ED,0x7FFF,0x255F,0x0000},{0x036A,0x021F,0x03FF,0x7FFF},
+        {0x7FFF,0x01DF,0x0112,0x0000},{0x231F,0x035F,0x00F2,0x0009},
+        {0x7FFF,0x03EA,0x011F,0x0000},{0x299F,0x001A,0x000C,0x0000},
+        {0x7FFF,0x027F,0x001F,0x0000},{0x7FFF,0x03E0,0x0206,0x0120},
+        {0x7FFF,0x7EEB,0x001F,0x7C00},{0x7FFF,0x3FFF,0x7E00,0x001F},
+        {0x7FFF,0x03FF,0x001F,0x0000},{0x03FF,0x001F,0x000C,0x0000},
+        {0x7FFF,0x033F,0x0193,0x0000},{0x0000,0x4200,0x037F,0x7FFF},
+        {0x7FFF,0x7E8C,0x7C00,0x0000},{0x7FFF,0x1BEF,0x6180,0x0000},
+        {0x7FFF,0x7FEA,0x7D5F,0x0000},{0x4778,0x3290,0x1D87,0x0861},
+    };
+    /* Step 1: verify Nintendo licensee (read directly from ROM buffer) */
+    u8 old_lic = m->rom[0x14B];
+    if (old_lic == 0x33) {
+        if (m->rom[0x144] != '0' || m->rom[0x145] != '1') return;
+    } else if (old_lic != 0x01) {
+        return;
+    }
+
+    u8 checksum = 0;
+    for (int i = 0; i < 16; i++)
+        checksum += m->rom[0x134 + i];
+    /* Step 3: find checksum in table */
+    int idx = 0;
+    while (idx < 77 && title_checksums[idx] != checksum) idx++;
+    if (idx >= 77) idx = 0; /* not found → default */
+
+    /* Step 4: for indices > 64, adjust using 4th letter */
+    if (idx > 64) {
+        u8 letter = m->rom[0x137]; /* 4th title letter */
+        int row = 0, fi = 0;
+        while (fi < 45 && fourth_letter_rows[fi] != letter) {
+            if (fourth_letter_rows[fi] == ' ') row = (fi + 1) / 8;
+            fi++;
         }
+        if (fi >= 45) idx = 0;
+        else idx = (idx - 65) + 14 * row;
+    }
+    int combo_id = idx < 93 ? palette_index_ofs[idx] : 0;
+    if (combo_id > 54) combo_id = 0;
+
+    /* Step 6: write OBJ0, OBJ1, BG palette RAM */
+    const u8 *combo = combos[combo_id];
+    int bg   = combo[2];
+    int obj0 = combo[0];
+    int obj1 = combo[1];
+
+    for (int i = 0; i < 4; i++) {
+        m->bg_palette[i * 2]     = (u8)(palettes[bg][i] & 0xFF);
+        m->bg_palette[i * 2 + 1] = (u8)(palettes[bg][i] >> 8);
+        m->obj_palette[i * 2]     = (u8)(palettes[obj0][i] & 0xFF);
+        m->obj_palette[i * 2 + 1] = (u8)(palettes[obj0][i] >> 8);
+        m->obj_palette[8 + i * 2]     = (u8)(palettes[obj1][i] & 0xFF);
+        m->obj_palette[8 + i * 2 + 1] = (u8)(palettes[obj1][i] >> 8);
+    }
     }
     if (m->sgb) {
-        static const u16 sgb0[4] = { 0x7FFF, 0x7FE0, 0x4F20, 0x0000 };
-        static const u16 sgb1[4] = { 0x7FFF, 0x7C80, 0x3C40, 0x0000 };
-        static const u16 sgb2[4] = { 0x7FFF, 0x03E0, 0x0200, 0x0000 };
-        static const u16 sgb3[4] = { 0x7FFF, 0x56B5, 0x294A, 0x0000 };
+        static const u16 sgb_shades[4] = { 0x7FFF, 0x56B5, 0x294A, 0x0000 };
         memset(m->sgb_attr_map, 0, sizeof(m->sgb_attr_map));
-        for (int i = 0; i < 4; i++) {
-            m->sgb_palettes[0][i] = sgb0[i];
-            m->sgb_palettes[1][i] = sgb1[i];
-            m->sgb_palettes[2][i] = sgb2[i];
-            m->sgb_palettes[3][i] = sgb3[i];
-        }
+        for (int pal = 0; pal < 4; pal++)
+            for (int i = 0; i < 4; i++)
+                m->sgb_palettes[pal][i] = sgb_shades[i];
     }
 }
 
@@ -227,7 +310,6 @@ bool mem_load_rom(mem_t *m, const char *p) {
         m->rom_title[i] = h[i+0x34];
     m->mbc_type = mbc(h[0x47]);
     resolve_model(m, (u8)((h[0x43] & 0x80) != 0), (u8)(h[0x46] == 0x03));
-    seed_compat_palettes(m);
     m->battery_backed = is_battery_cart(h[0x47]);
     m->rom_banks = h[0x48] <= 8 ? (1 << (h[0x48] + 1)) : 512;
     m->ram_banks = h[0x49] <= 4 ? (1 << (h[0x49] + 2)) : 0;
@@ -237,6 +319,7 @@ bool mem_load_rom(mem_t *m, const char *p) {
     m->rom = malloc(rs);
     if (!m->rom) { fclose(f); return false; }
     memset(m->rom, 0xFF, rs); fread(m->rom, 1, sz < rs ? sz : rs, f); fclose(f);
+    seed_compat_palettes(m);
     if (m->ram_banks > 0)
         m->eram = calloc(1, m->ram_banks * 0x2000);
     m->mbc_rom_bank = 1; m->mbc_ram_bank = 0; m->mbc_mode = 0; m->mbc_ram_enable = false;
