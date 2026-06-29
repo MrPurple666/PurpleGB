@@ -1,6 +1,6 @@
 CC := gcc
 CFLAGS := -std=c99 -O2 -Wall -Wextra $(shell pkg-config --cflags sdl3)
-LDFLAGS := $(shell pkg-config --libs sdl3) -lm
+LDFLAGS := $(shell pkg-config --libs sdl3)
 
 SRCS := $(wildcard src/*.c)
 purplegb: $(SRCS)
