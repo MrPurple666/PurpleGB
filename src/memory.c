@@ -46,6 +46,7 @@ void mem_init(mem_t *m) {
     m->active_mode = GB_MODE_DMG;
     m->cgb = false;
     m->sgb = false;
+    m->cart_cgb = false;
     m->cgb_vbk = 0;
     m->cgb_svbk = 1;
     memset(m->bg_palette, 0xFF, sizeof(m->bg_palette));
@@ -81,6 +82,7 @@ static int mbc(u8 t) {
 
 static void resolve_model(mem_t *m, u8 cgb_flag, u8 sgb_flag)
 {
+    m->cart_cgb = cgb_flag != 0;
     switch (m->forced_mode) {
         case GB_MODE_DMG: m->active_mode = GB_MODE_DMG; break;
         case GB_MODE_CGB: m->active_mode = GB_MODE_CGB; break;

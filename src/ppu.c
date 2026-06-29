@@ -138,7 +138,7 @@ void render_scanline(ppu_t *ppu, mem_t *mem, int ly)
             int tile_index = mem_read(mem, map_addr);
             u8 pixels[8];
 
-            if (mem->cgb) {
+            if (mem->cart_cgb) {
                 /* Read attribute byte from VRAM bank 1 */
                 u8 attr = mem->vram_banks[1][map_addr & 0x1FFF];
                 u8 pal_num = attr & 0x07;
@@ -190,7 +190,7 @@ void render_scanline(ppu_t *ppu, mem_t *mem, int ly)
 
             u8 pixels[8];
 
-            if (mem->cgb) {
+            if (mem->cart_cgb) {
                 u8 attr = mem->vram_banks[1][map_addr & 0x1FFF];
                 u8 pal_num = attr & 0x07;
                 bool vram_bank = (attr & 0x08) != 0;
@@ -265,7 +265,7 @@ void render_scanline(ppu_t *ppu, mem_t *mem, int ly)
 
             u8 pixels[8];
 
-            if (mem->cgb) {
+            if (mem->cart_cgb) {
                 u8 pal_num = sattr & 0x07;
                 bool vram_bank = (sattr & 0x08) != 0;
 
@@ -315,7 +315,7 @@ void render_scanline(ppu_t *ppu, mem_t *mem, int ly)
     }
 
     for (int x = 0; x < LCD_WIDTH; x++) {
-        if (mem->cgb) {
+        if (mem->cart_cgb) {
             u8 val = ppu->line_buf[x];
             u8 pal = val / 4;
             u8 col = val % 4;

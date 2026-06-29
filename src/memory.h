@@ -47,6 +47,7 @@ typedef struct {
     /* CGB/SGB fields */
     bool cgb;
     bool sgb;
+    bool cart_cgb;
     u8 bg_palette[64];
     u8 obj_palette[64];
     u8 cgb_vbk;

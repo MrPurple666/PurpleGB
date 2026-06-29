@@ -114,7 +114,7 @@ int main(int argc,char**argv){
                 ppu_tick(&gb.ppu,&gb.mem,cy);timer_tick(&gb.timer,&gb.mem,cy);apu_tick(&gb.apu,cy);tc+=cy;
             }
         }
-        if(gb.mem.cgb) ppu_decode_cgb_palettes(&gb.ppu,&gb.mem);
+        if(gb.mem.cart_cgb) ppu_decode_cgb_palettes(&gb.ppu,&gb.mem);
         if(gb.paused&&gb.rom_loaded){
             u32*fb=gb.ppu.framebuffer;
             for(int y=0;y<144;y++)for(int x=0;x<160;x++){u32 c=fb[y*160+x];fb[y*160+x]=0xFF000000|((u32)(((c>>16)&0xFF)*0.5f))<<16|((u32)(((c>>8)&0xFF)*0.5f))<<8|(u32)((c&0xFF)*0.5f);}
