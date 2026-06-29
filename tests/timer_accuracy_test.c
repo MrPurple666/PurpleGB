@@ -66,6 +66,7 @@ static void test_timer_overflow_reloads_tma_and_requests_interrupt(void)
     mem.io[0x07] = 0x05;
 
     timer_tick(&timer, &mem, 16);
+    timer_tick(&timer, &mem, 4);
 
     assert(mem.io[0x05] == 0x9C);
     assert((mem.io[0x0F] & (1 << INT_TIMER)) != 0);
@@ -87,6 +88,20 @@ static void test_div_write_can_trigger_falling_edge_increment(void)
     assert(mem.io[0x05] == 0x11);
 }
 
+static void test_tac_write_can_trigger_falling_edge_increment(void)
+{
+    mem_t mem;
+    timer_t timer;
+    setup(&mem, &timer);
+
+    mem.io[0x05] = 0x20;
+    mem.io[0x07] = 0x05;
+    timer.div_counter = 0x0008; /* old selected bit high, disable causes falling edge */
+
+    mem_write(&mem, 0xFF07, 0x00);
+    assert(mem.io[0x05] == 0x21);
+}
+
 int main(void)
 {
     test_div_write_resets_visible_div();
@@ -94,5 +109,6 @@ int main(void)
     test_timer_enabled_increments_on_selected_edge();
     test_timer_overflow_reloads_tma_and_requests_interrupt();
     test_div_write_can_trigger_falling_edge_increment();
+    test_tac_write_can_trigger_falling_edge_increment();
     return 0;
 }
