@@ -193,54 +193,67 @@ void apu_tick(apu_t *apu, int cycles) {
         channel_tick_wave(&apu->ch3);
         channel_tick_noise(&apu->ch4);
 
-        /* Mix and output at sample_rate */
-        /* Approximate: we accumulate at T-cycle rate, then downsample */
-        /* For simplicity, we'll output one sample every (4194304/sample_rate) ≈ 95 T-cycles */
-        static int sample_accum = 0;
-        static const int sample_period = 95; /* ~44100 Hz at 4.194 MHz */
-        sample_accum++;
-        if (sample_accum >= sample_period) {
-            sample_accum = 0;
-            /* Mix all channels */
-            u8 ch1_out = get_square_output(&apu->ch1);
-            u8 ch2_out = get_square_output(&apu->ch2);
-            u8 ch3_out = 0; /* get_wave_output needs apu context */
-            u8 ch4_out = get_noise_output(&apu->ch4);
+        /* Mix using box filter: accumulate over sample_period, then average */
+        static int mix_accum = 0;
+        static int mix_l_sum = 0, mix_r_sum = 0;
+        static const int sample_period = 95; /* ~44100 Hz */
+        mix_accum++;
 
-            /* CH3 wave output */
-            if (apu->ch3.enabled && apu->ch3.length_counter > 0) {
-                u32 pos = apu->ch3.wave_pos;
-                u8 shift = (pos & 1) ? 0 : 4;
-                u8 sample = (apu->wave_ram.wave[pos >> 1] >> shift) & 0x0F;
+        /* Get instantaneous channel outputs (0-15) and accumulate */
+        u8 ch1_o = get_square_output(&apu->ch1);
+        u8 ch2_o = get_square_output(&apu->ch2);
+        u8 ch3_o = 0;
+        u8 ch4_o = get_noise_output(&apu->ch4);
 
-                /* Output level from NR32 */
-                static const u8 wave_levels[4] = {4, 0, 1, 2}; /* mute, 100%, 50%, 25% */
-                u8 level_shift = wave_levels[(apu->ch3.nr32_level >> 5) & 3];
-                ch3_out = sample >> level_shift;
-            }
+        if (apu->ch3.enabled && apu->ch3.length_counter > 0) {
+            u32 pos = apu->ch3.wave_pos;
+            u8 shift = (pos & 1) ? 0 : 4;
+            u8 sample = (apu->wave_ram.wave[pos >> 1] >> shift) & 0x0F;
+            static const u8 wave_levels[4] = {4, 0, 1, 2};
+            u8 level_shift = wave_levels[(apu->ch3.nr32_level >> 5) & 3];
+            ch3_o = sample >> level_shift;
+        }
 
-            /* Apply panning and volume */
-            /* Left output: mix of channels based on NR51 bits 4-7 */
-            /* Right output: mix of channels based on NR51 bits 0-3 */
-            u8 left_vol = (apu->nr50 >> 4) & 7;
-            u8 right_vol = apu->nr50 & 7;
+        /* Convert unsigned DAC (0-15, where ~7.5=0) to signed */
+        int ch1_s = (int)ch1_o - 8;
+        int ch2_s = (int)ch2_o - 8;
+        int ch3_s = (int)ch3_o - 8;
+        int ch4_s = (int)ch4_o - 8;
 
-            s16 left = 0, right = 0;
-            if (apu->nr51 & 0x10) left += ch1_out;
-            if (apu->nr51 & 0x20) left += ch2_out;
-            if (apu->nr51 & 0x40) left += ch3_out;
-            if (apu->nr51 & 0x80) left += ch4_out;
-            if (apu->nr51 & 0x01) right += ch1_out;
-            if (apu->nr51 & 0x02) right += ch2_out;
-            if (apu->nr51 & 0x04) right += ch3_out;
-            if (apu->nr51 & 0x08) right += ch4_out;
+        int l_sum = 0, r_sum = 0;
+        if (apu->nr51 & 0x10) l_sum += ch1_s;
+        if (apu->nr51 & 0x20) l_sum += ch2_s;
+        if (apu->nr51 & 0x40) l_sum += ch3_s;
+        if (apu->nr51 & 0x80) l_sum += ch4_s;
+        if (apu->nr51 & 0x01) r_sum += ch1_s;
+        if (apu->nr51 & 0x02) r_sum += ch2_s;
+        if (apu->nr51 & 0x04) r_sum += ch3_s;
+        if (apu->nr51 & 0x08) r_sum += ch4_s;
 
-            left = (left * (left_vol + 1) * 256) / 60;
-            right = (right * (right_vol + 1) * 256) / 60;
+        mix_l_sum += l_sum;
+        mix_r_sum += r_sum;
+
+        if (mix_accum >= sample_period) {
+            mix_accum = 0;
+            /* Average over the sample period */
+            int left  = mix_l_sum / sample_period;
+            int right = mix_r_sum / sample_period;
+            mix_l_sum = 0;
+            mix_r_sum = 0;
+
+            /* Apply master volume and scale to s16 range */
+            u8 lvol = (apu->nr50 >> 4) & 7;
+            u8 rvol = apu->nr50 & 7;
+            left  = left  * (lvol + 1) * 256;
+            right = right * (rvol + 1) * 256;
+            if (left  >  32767) left  =  32767;
+            if (left  < -32768) left  = -32768;
+            if (right >  32767) right =  32767;
+            if (right < -32768) right = -32768;
 
             if (apu->sample_pos < apu->sample_capacity) {
-                apu->sample_buf[apu->sample_pos++] = left;
-                apu->sample_buf[apu->sample_pos++] = right;
+                apu->sample_buf[apu->sample_pos++] = (s16)left;
+                apu->sample_buf[apu->sample_pos++] = (s16)right;
             }
         }
     }
