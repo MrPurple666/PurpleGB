@@ -63,7 +63,8 @@ static void channel_tick_square(channel_t *ch) {
     if (ch->freq_timer > 0)
         ch->freq_timer--;
     if (ch->freq_timer == 0) {
-        ch->freq_timer = (2048 - ch->freq) * 4;
+        u16 p = ch->freq ? ch->freq : 8;
+        ch->freq_timer = (2048 - p) * 4;
         ch->duty_pos = (ch->duty_pos + 1) & 7;
     }
 }
@@ -72,7 +73,8 @@ static void channel_tick_wave(channel_t *ch) {
     if (ch->freq_timer > 0)
         ch->freq_timer--;
     if (ch->freq_timer == 0) {
-        ch->freq_timer = (2048 - ch->freq) * 2;
+        u16 p = ch->freq ? ch->freq : 8;
+        ch->freq_timer = (2048 - p) * 2;
         ch->wave_pos = (ch->wave_pos + 1) & 31;
     }
 }
@@ -82,7 +84,9 @@ static void channel_tick_noise(channel_t *ch) {
         ch->freq_timer--;
     if (ch->freq_timer == 0) {
         static const int divisors[8] = {8, 16, 32, 48, 64, 80, 96, 112};
-        ch->freq_timer = divisors[ch->freq & 7] * 2;
+        int shift = (ch->freq >> 4) & 0xF;
+        if (shift >= 14) return; /* clocking stopped */
+        ch->freq_timer = divisors[ch->freq & 7] << shift;
 
         /* Tick LFSR */
         u8 xor_val = (ch->lfsr & 1) ^ ((ch->lfsr >> 1) & 1);
@@ -210,7 +214,7 @@ void apu_tick(apu_t *apu, int cycles) {
                 u8 sample = (apu->wave_ram.wave[pos >> 1] >> shift) & 0x0F;
 
                 /* Output level from NR32 */
-                static const u8 wave_levels[4] = {0, 3, 2, 1};
+                static const u8 wave_levels[4] = {4, 0, 1, 2}; /* mute, 100%, 50%, 25% */
                 u8 level_shift = wave_levels[(apu->ch3.nr32_level >> 5) & 3];
                 ch3_out = sample >> level_shift;
             }
@@ -440,7 +444,8 @@ void apu_write(apu_t *apu, u16 addr, u8 val) {
                 if (apu->ch4.length_counter == 0)
                     apu->ch4.length_counter = 64;
                 apu->ch4.volume = apu->ch4.volume_init;
-                apu->ch4.lfsr = 0x7FFF;
+                apu->ch4.lfsr = 0x7FFF; /* reset LFSR to all 1s */
+                apu->ch4.freq_timer = 0; /* immediately start */
             }
             break;
         case 0xFF24: /* NR50 */
