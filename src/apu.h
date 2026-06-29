@@ -78,10 +78,7 @@ typedef struct {
     bool enabled;
     u8 nr50, nr51;
 
-    // SDL3 audio stream
     SDL_AudioStream *stream;
-
-    // Cycle counter for audio timing
     u64 total_cycles;
 } apu_t;
 

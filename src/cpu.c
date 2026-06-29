@@ -8,6 +8,35 @@ op_fn cb_opcodes[256];
 const u8 main_cycles[256]={1,3,2,2,1,1,2,1,5,2,2,2,1,1,2,1,1,3,2,2,1,1,2,1,3,2,2,2,1,1,2,1,2,3,2,2,1,1,2,1,2,2,2,2,1,1,2,1,2,3,2,2,3,3,3,1,2,2,2,2,1,1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,2,1,2,2,3,1,3,3,3,2,2,1,3,1,3,3,2,2,2,2,3,1,3,3,2,2,2,1,3,1,3,1,2,2,3,2,2,1,1,3,2,2,4,1,4,1,1,1,2,2,3,2,2,1,1,3,2,2,3,2,4,1,1,1,2,2};
 const u8 cb_cycles[256]={2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,2,2,2,2,2,2,3,2,2,2,2,2,2,2,3,2,2,2,2,2,2,2,3,2,2,2,2,2,2,2,3,2,2,2,2,2,2,2,3,2,2,2,2,2,2,2,3,2,2,2,2,2,2,2,3,2,2,2,2,2,2,2,3,2,2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2};
 
+enum { TRACE_RING = 64 };
+static u16 trace_pc[TRACE_RING];
+static u8 trace_op[TRACE_RING];
+static int trace_pos;
+
+static void trace_step(u16 pc, u8 op){
+    trace_pc[trace_pos] = pc;
+    trace_op[trace_pos] = op;
+    trace_pos = (trace_pos + 1) % TRACE_RING;
+}
+
+static void dump_undef(cpu_t*c, mem_t*m){
+    FILE *f = fopen("purplegb_debug.log", "a");
+    if (!f) return;
+    fprintf(f, "Undefined opcode trap at PC=%04X OP=%02X\n", c->pc - 1, mem_read(m, c->pc - 1));
+    fprintf(f, "AF=%04X BC=%04X DE=%04X HL=%04X SP=%04X IE=%02X IF=%02X LCDC=%02X STAT=%02X LY=%02X\n",
+        cpu_af(c), cpu_bc(c), cpu_de(c), cpu_hl(c), c->sp, m->ie, m->io[0x0F], m->io[0x40], m->io[0x41], m->io[0x44]);
+    fprintf(f, "Recent trace:\n");
+    for (int i = 0; i < TRACE_RING; i++) {
+        int idx = (trace_pos + i) % TRACE_RING;
+        if (!trace_pc[idx] && !trace_op[idx]) continue;
+        fprintf(f, "  %04X: %02X\n", trace_pc[idx], trace_op[idx]);
+    }
+    fprintf(f, "Stack bytes:");
+    for (int i = 0; i < 8; i++) fprintf(f, " %02X", mem_read(m, c->sp + i));
+    fprintf(f, "\n\n");
+    fclose(f);
+}
+
 static inline u8 gr(cpu_t*c,mem_t*m,int r){
     switch(r){case 0:return c->b;case 1:return c->c;case 2:return c->d;case 3:return c->e;case 4:return c->h;case 5:return c->l;case 6:return mem_read(m,cpu_hl(c));case 7:return c->a;default:return 0;}
 }
@@ -22,8 +51,8 @@ int cpu_step(cpu_t*c,mem_t*m){
     if(c->halted){if(interrupt_pending(m))c->halted=0;return 1;}
     if(c->stopped)return 1;
     if(c->ime&&interrupt_pending(m))return cpu_service_interrupt(c,m);
-    u8 op=mem_read(m,c->pc++);
-    if(op==0xCB){u8 cb=mem_read(m,c->pc++);cb_opcodes[cb](c,m);
+    u16 pc=c->pc;u8 op=mem_read(m,c->pc++);trace_step(pc,op);
+    if(op==0xCB){u8 cb=mem_read(m,c->pc++);trace_step(c->pc-1,cb);cb_opcodes[cb](c,m);
         if(c->ime_scheduled){c->ime=1;c->ime_scheduled=0;}return cb_cycles[cb];}
     main_opcodes[op](c,m);
 
@@ -112,7 +141,7 @@ F op_stop(cpu_t*c,mem_t*m){(void)m;c->pc++;c->stopped=1;}
 F op_add_sp_r8(cpu_t*c,mem_t*m){s8 o=(s8)mem_read(m,c->pc++);u16 s=c->sp;u16 r=s+o;cpu_set_z(c,0);cpu_set_n(c,0);cpu_set_h(c,((s&0xF)+(o&0xF))>0xF);cpu_set_c(c,((s&0xFF)+(u8)o)>0xFF);c->sp=r;}
 F op_ld_hl_sp_r8(cpu_t*c,mem_t*m){s8 o=(s8)mem_read(m,c->pc++);u16 s=c->sp;u16 r=s+o;cpu_set_z(c,0);cpu_set_n(c,0);cpu_set_h(c,((s&0xF)+(o&0xF))>0xF);cpu_set_c(c,((s&0xFF)+(u8)o)>0xFF);cpu_set_hl(c,r);}
 F op_ld_sp_hl(cpu_t*c,mem_t*m){(void)m;c->sp=cpu_hl(c);}
-F op_und(cpu_t*c,mem_t*m){(void)c;(void)m;fprintf(stderr,"Undefined op at PC=%04X\n",c->pc-1);c->halted=1;}
+F op_und(cpu_t*c,mem_t*m){fprintf(stderr,"Undefined op at PC=%04X\n",c->pc-1);dump_undef(c,m);c->halted=1;}
 F op_add_hl_bc(cpu_t*c,mem_t*m){(void)m;u16 h=cpu_hl(c);u32 r=h+cpu_bc(c);cpu_set_n(c,0);cpu_set_h(c,((h&0xFFF)+(cpu_bc(c)&0xFFF))>0xFFF);cpu_set_c(c,r>0xFFFF);cpu_set_hl(c,r);}
 F op_add_hl_de(cpu_t*c,mem_t*m){(void)m;u16 h=cpu_hl(c);u32 r=h+cpu_de(c);cpu_set_n(c,0);cpu_set_h(c,((h&0xFFF)+(cpu_de(c)&0xFFF))>0xFFF);cpu_set_c(c,r>0xFFFF);cpu_set_hl(c,r);}
 F op_add_hl_hl(cpu_t*c,mem_t*m){(void)m;u16 h=cpu_hl(c);u32 r=h+h;cpu_set_n(c,0);cpu_set_h(c,((h&0xFFF)*2)>0xFFF);cpu_set_c(c,r>0xFFFF);cpu_set_hl(c,r);}

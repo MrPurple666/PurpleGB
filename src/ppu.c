@@ -67,8 +67,8 @@ void render_scanline(ppu_t *ppu, mem_t *mem, int ly)
 {
     u8 lcdc = mem->io[0x40];
 
-    // Clear line buffer
     memset(ppu->line_buf, 0, LCD_WIDTH);
+    memset(ppu->bg_color_buf, 0, LCD_WIDTH);
 
     if (!(lcdc & LCDC_LCD_ENABLE)) {
         // LCD disabled: all white
@@ -91,7 +91,9 @@ void render_scanline(ppu_t *ppu, mem_t *mem, int ly)
             int tile_index = mem_read(mem, map_addr);
             u8 pixels[8];
             fetch_tile_line(pixels, mem, tile_index, tile_y, tile_signed);
-            ppu->line_buf[x] = (mem->io[0x47] >> (pixels[tile_x] * 2)) & 3;
+            u8 color = pixels[tile_x];
+            ppu->bg_color_buf[x] = color;
+            ppu->line_buf[x] = (mem->io[0x47] >> (color * 2)) & 3;
         }
     }
 
@@ -114,8 +116,9 @@ void render_scanline(ppu_t *ppu, mem_t *mem, int ly)
 
             u8 pixels[8];
             fetch_tile_line(pixels, mem, tile_index, tile_y, tile_signed);
-
-            ppu->line_buf[screen_x] = (mem->io[0x47] >> (pixels[tile_x] * 2)) & 3;
+            u8 color = pixels[tile_x];
+            ppu->bg_color_buf[screen_x] = color;
+            ppu->line_buf[screen_x] = (mem->io[0x47] >> (color * 2)) & 3;
         }
         ppu->window_line++;
     }
@@ -174,11 +177,8 @@ void render_scanline(ppu_t *ppu, mem_t *mem, int ly)
                 u8 color = pixels[p];
                 if (color == 0) continue; // transparent
 
-                // Apply sprite palette
                 u8 pal_color = (palette >> (color * 2)) & 3;
-
-                // Priority: only draw if BG pixel is color 0 or no priority
-                u8 bg_color = ppu->line_buf[px];
+                u8 bg_color = ppu->bg_color_buf[px];
                 if (!bg_priority || bg_color == 0) {
                     ppu->line_buf[px] = pal_color;
                 }

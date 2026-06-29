@@ -13,6 +13,7 @@ typedef struct {
     int cycles;
     int stat_signal;
     u8 line_buf[LCD_WIDTH];
+    u8 bg_color_buf[LCD_WIDTH];
     u8 window_line;
     u8 ly;
 } ppu_t;
