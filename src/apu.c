@@ -468,10 +468,13 @@ void apu_write(apu_t *apu, u16 addr, u8 val) {
                 apu->ch3.lfsr = 0x7FFF;
                 apu->ch4.lfsr = 0x7FFF;
                 apu->nr52 = 0;
-                apu->frame_seq = 0;
-                apu->frame_seq_timer = 0;
             } else {
+                bool was_off = !(apu->nr52 & 0x80);
                 apu->nr52 = 0x80;
+                if (was_off) {
+                    apu->frame_seq = 0;
+                    apu->frame_seq_timer = 0;
+                }
             }
             break;
         default:
