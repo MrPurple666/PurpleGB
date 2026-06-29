@@ -38,7 +38,8 @@ void mem_init(mem_t *m) {
     m->io[0x44] = 0x00; m->io[0x45] = 0x00;
     m->io[0x47] = 0xFC; m->io[0x48] = 0xFF;
     m->io[0x49] = 0xFF; m->io[0x4A] = 0x00;
-    m->io[0x4B] = 0x00; m->ie = 0x00;
+    m->dma_src = 0;
+    m->dma_remaining = 0;
 }
 
 static int mbc(u8 t) {
@@ -112,7 +113,10 @@ u8 mem_read(mem_t *m, u16 a) {
     if (a < 0xD000) return m->wram[a & 0x0FFF];
     if (a < 0xE000) return m->wram[0x1000 + (a & 0x0FFF)];
     if (a < 0xFE00) return m->wram[a & 0x1FFF];
-    if (a < 0xFEA0) return m->oam[a & 0xFF];
+    if (a < 0xFEA0) {
+        if (m->dma_remaining > 0) return 0xFF;
+        return m->oam[a & 0xFF];
+    }
     if (a < 0xFF00) return 0xFF;
     if (a < 0xFF80) {
         if (a == 0xFF00 && m->joypad) return joypad_read((joypad_t*)m->joypad);
@@ -126,6 +130,7 @@ void mem_write(mem_t *m, u16 a, u8 v) {
     if (a < 0x8000) { mbc_write(m, a, v); return; }
     if (a < 0xA000) { m->vram[a & 0x1FFF] = v; return; }
     if (a < 0xC000) { if (m->mbc_ram_enable && m->eram && m->ram_banks > 0) m->eram[m->mbc_ram_bank * 0x2000 + (a & 0x1FFF)] = v; return; }
+    if (a >= 0xFE00 && a < 0xFEA0 && m->dma_remaining > 0) return;
     if (a < 0xD000) { m->wram[a & 0x0FFF] = v; return; }
     if (a < 0xE000) { m->wram[0x1000 + (a & 0x0FFF)] = v; return; }
     if (a < 0xFE00) { m->wram[a & 0x1FFF] = v; return; }
@@ -169,13 +174,11 @@ void mem_write(mem_t *m, u16 a, u8 v) {
             case 0x4A: case 0x4B:
                 m->io[r] = v;
                 break;
-            case 0x46: {
+            case 0x46:
                 m->io[0x46] = v;
-                u16 src = (u16)v << 8;
-                for (int i = 0; i < 0xA0; i++)
-                    m->oam[i] = mem_read(m, src + i);
+                m->dma_src = v;
+                m->dma_remaining = 0xA0;
                 break;
-            }
             case 0x50: m->boot_on = false; m->io[0x50] = v; break;
             case 0x10: case 0x11: case 0x12: case 0x13: case 0x14:
             case 0x16: case 0x17: case 0x18: case 0x19:
@@ -202,3 +205,16 @@ void mem_write(mem_t *m, u16 a, u8 v) {
 
 void mem_write16(mem_t *m, u16 a, u16 v) { mem_write(m, a, v & 0xFF); mem_write(m, a+1, v >> 8); }
 
+void mem_dma_tick(mem_t *m, int cycles)
+{
+    if (m->dma_remaining <= 0) return;
+    int idx = 0xA0 - m->dma_remaining;
+    for (int i = 0; i < cycles && m->dma_remaining > 0; i++) {
+        if ((i & 3) == 0) {
+            u16 src = ((u16)m->dma_src << 8) + idx;
+            m->oam[idx] = mem_read(m, src);
+            idx++;
+            m->dma_remaining--;
+        }
+    }
+}

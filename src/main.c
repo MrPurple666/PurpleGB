@@ -64,6 +64,7 @@ int main(int argc,char**argv){
             int tc=0;
             while(tc<70224){
                 int cy=cpu_step(&gb.cpu,&gb.mem);
+                mem_dma_tick(&gb.mem, cy);
                 ppu_tick(&gb.ppu,&gb.mem,cy);timer_tick(&gb.timer,&gb.mem,cy);tc+=cy;
             }
         }
