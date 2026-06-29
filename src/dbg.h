@@ -17,13 +17,14 @@ extern uint32_t dbg_mask;
 #define DBG_PPU    8
 #define DBG_INT    16
 #define DBG_DMA    32
+#define DBG_APU    64
 
 /* Parse DBG_FILTER env var once */
 static inline uint32_t dbg_parse_filter(void)
 {
     const char *f = getenv("DBG_FILTER");
     uint32_t m = 0;
-    if (!f) return 0x3F; /* default: all on */
+    if (!f) return 0x7F; /* default: all on */
     for (const char *p = f; *p; ) {
         while (*p == ' ' || *p == ',') p++;
         const char *e = p;
@@ -35,7 +36,8 @@ static inline uint32_t dbg_parse_filter(void)
         else if (len == 3 && !strncmp(p, "ppu", 3))    m |= DBG_PPU;
         else if (len == 3 && !strncmp(p, "int", 3))    m |= DBG_INT;
         else if (len == 3 && !strncmp(p, "dma", 3))    m |= DBG_DMA;
-        else if (len == 3 && !strncmp(p, "all", 3))    m |= 0x3F;
+        else if (len == 3 && !strncmp(p, "apu", 3))    m |= DBG_APU;
+        else if (len == 3 && !strncmp(p, "all", 3))    m |= 0x7F;
         p = e;
     }
     return m;

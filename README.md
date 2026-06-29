@@ -81,7 +81,21 @@ Run a ROM directly:
 ./purplegb path/to/game.gb
 ```
 
-You can also drag and drop a `.gb` or `.gbc` file onto the window.
+Force the hardware model:
+
+```sh
+./purplegb --mode dmg path/to/game.gb
+./purplegb --mode cgb path/to/game.gb
+./purplegb --mode sgb path/to/game.gb
+```
+
+Short form:
+
+```sh
+./purplegb -m cgb path/to/game.gb
+```
+
+You can also drag and drop a `.gb` or `.gbc` file onto the window. The selected `--mode` / `-m` override is preserved for file picker and drag-and-drop loads too.
 
 ## Controls
 

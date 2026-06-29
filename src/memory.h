@@ -20,6 +20,8 @@ typedef uint64_t u64;
 #define IO_SIZE       0x80
 
 typedef enum { MBC_NONE = 0, MBC1, MBC3, MBC5 } mbc_type_t;
+typedef enum { GB_MODE_AUTO = 0, GB_MODE_DMG, GB_MODE_CGB, GB_MODE_SGB } gb_mode_t;
+
 
 typedef struct {
     u8 *rom;
@@ -40,7 +42,11 @@ typedef struct {
     u8 dma_src;
     int dma_remaining;
     void *joypad, *timer, *apu;
-    /* CGB fields */
+    gb_mode_t forced_mode;
+    gb_mode_t active_mode;
+    /* CGB/SGB fields */
+    bool cgb;
+    bool sgb;
     u8 bg_palette[64];
     u8 obj_palette[64];
     u8 cgb_vbk;

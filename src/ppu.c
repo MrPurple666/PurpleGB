@@ -284,8 +284,6 @@ void render_scanline(ppu_t *ppu, mem_t *mem, int ly)
                     u8 color = pixels[p];
                     if (color == 0) continue; // transparent
 
-                    u8 bg_color = ppu->bg_color_buf[px];
-                    u8 bg_prio = ppu->line_buf[px] / 4; /* BG palette number */
                     u8 bg_col = ppu->line_buf[px] % 4;
 
                     /* CGB priority: if bg_priority set, BG wins unless BG color is 0 */

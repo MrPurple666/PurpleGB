@@ -42,7 +42,10 @@ void mem_init(mem_t *m) {
     m->io[0x49] = 0xFF; m->io[0x4A] = 0x00;
     m->dma_src = 0;
     m->dma_remaining = 0;
+    m->forced_mode = GB_MODE_AUTO;
+    m->active_mode = GB_MODE_DMG;
     m->cgb = false;
+    m->sgb = false;
     m->cgb_vbk = 0;
     m->cgb_svbk = 1;
     memset(m->bg_palette, 0xFF, sizeof(m->bg_palette));
@@ -76,6 +79,23 @@ static int mbc(u8 t) {
     }
 }
 
+static void resolve_model(mem_t *m, u8 cgb_flag, u8 sgb_flag)
+{
+    switch (m->forced_mode) {
+        case GB_MODE_DMG: m->active_mode = GB_MODE_DMG; break;
+        case GB_MODE_CGB: m->active_mode = GB_MODE_CGB; break;
+        case GB_MODE_SGB: m->active_mode = GB_MODE_SGB; break;
+        case GB_MODE_AUTO:
+        default:
+            if (cgb_flag) m->active_mode = GB_MODE_CGB;
+            else if (sgb_flag) m->active_mode = GB_MODE_SGB;
+            else m->active_mode = GB_MODE_DMG;
+            break;
+    }
+    m->cgb = m->active_mode == GB_MODE_CGB;
+    m->sgb = m->active_mode == GB_MODE_SGB;
+}
+
 bool mem_load_rom(mem_t *m, const char *p) {
     FILE *f = fopen(p, "rb");
     if (!f) return false;
@@ -86,7 +106,7 @@ bool mem_load_rom(mem_t *m, const char *p) {
     for (int i = 0; i < 16 && h[i+0x34] >= 0x20 && h[i+0x34] < 0x7F; i++)
         m->rom_title[i] = h[i+0x34];
     m->mbc_type = mbc(h[0x47]);
-    m->cgb = (h[0x43] & 0x80) != 0;
+    resolve_model(m, (u8)((h[0x43] & 0x80) != 0), (u8)(h[0x46] == 0x03));
     m->battery_backed = is_battery_cart(h[0x47]);
     m->rom_banks = h[0x48] <= 8 ? (1 << (h[0x48] + 1)) : 512;
     m->ram_banks = h[0x49] <= 4 ? (1 << (h[0x49] + 2)) : 0;
