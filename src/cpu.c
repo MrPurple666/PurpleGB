@@ -156,7 +156,7 @@ F op_ld_rr(cpu_t*c,mem_t*m){u8 o=mem_read(m,c->pc-1);int d=(o>>3)&7,s=o&7;(void)
 #define LDIM(n,rn) F op_ld_##rn(cpu_t*c,mem_t*m){u8 v=mem_read(m,c->pc++);sr(c,m,n,v);}
 LDIM(0,b)LDIM(1,c)LDIM(2,d)LDIM(3,e)LDIM(4,h)LDIM(5,l)LDIM(6,h_)LDIM(7,a)
 
-#define ICD(n) F op_inc_##n(cpu_t*c,mem_t*m){u8 v=n==6?mem_read(m,cpu_hl(c)):gr(c,m,n);u8 r=v+1;if(n==6)mem_write(m,cpu_hl(c),r);else sr(c,m,n,r);cpu_set_z(c,!r);cpu_set_n(c,0);cpu_set_h(c,!(v&0xF));}
+#define ICD(n) F op_inc_##n(cpu_t*c,mem_t*m){u8 v=n==6?mem_read(m,cpu_hl(c)):gr(c,m,n);u8 r=v+1;if(n==6)mem_write(m,cpu_hl(c),r);else sr(c,m,n,r);cpu_set_z(c,!r);cpu_set_n(c,0);cpu_set_h(c,(v&0xF)==0xF);}
 #define DCD(n) F op_dec_##n(cpu_t*c,mem_t*m){u8 v=n==6?mem_read(m,cpu_hl(c)):gr(c,m,n);u8 r=v-1;if(n==6)mem_write(m,cpu_hl(c),r);else sr(c,m,n,r);cpu_set_z(c,!r);cpu_set_n(c,1);cpu_set_h(c,!(v&0xF));}
 ICD(0)DCD(0)ICD(1)DCD(1)ICD(2)DCD(2)ICD(3)DCD(3)ICD(4)DCD(4)ICD(5)DCD(5)ICD(6)DCD(6)ICD(7)DCD(7)
 #define RST(n) F op_rst_##n(cpu_t*c,mem_t*m){c->sp-=2;mem_write16(m,c->sp,c->pc);c->pc=n;}

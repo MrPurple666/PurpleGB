@@ -428,8 +428,8 @@ void mem_write(mem_t *m, u16 a, u8 v) {
             sgb_handle_joyp_write(m, sel);
             return;
         }
-        if (r == 0x01) { m->io[0x01] = v; DBG(MEM, "W FF01 (SB) = %02X", v); return; }
-        if (r == 0x02) { m->io[0x02] = v; DBG(MEM, "W FF02 (SC) = %02X", v); return; }
+        if (r == 0x01) { m->io[0x01] = v; return; }
+        if (r == 0x02) { m->io[0x02] = v; if ((v & 0x81) == 0x81) putchar(m->io[0x01]); fflush(stdout); return; }
         if (r == 0x04) { if (m->timer) { timer_write_div((timer_t *)m->timer, m); } else { m->io[0x04] = 0; } return; }
         if (r == 0x05) { m->io[0x05] = v; DBG(TIMER, "TIMA write = %02X", v); return; }
         if (r == 0x06) { m->io[0x06] = v; DBG(TIMER, "TMA write = %02X", v); return; }
