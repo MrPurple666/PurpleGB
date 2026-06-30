@@ -47,6 +47,7 @@ static void lr(gb_t*g,const char*p){
     g->mem.hram[0x36]=0xC9;
     if(!mem_load_rom(&g->mem,p))return;
     g->mem.boot_on=1;cpu_init_boot(&g->cpu);
+    if(g->mem.cgb) ppu_decode_cgb_palettes(&g->ppu,&g->mem);
     g->rom_loaded=1;
     fprintf(stderr,"ROM loaded=1 title='%s' mode=%s%s\n",g->mem.rom_title,mode_name(g->mem.active_mode),g->mem.forced_mode!=GB_MODE_AUTO?" (forced)":"");
 }
