@@ -85,7 +85,11 @@ static void resolve_model(mem_t *m, u8 cgb_flag, u8 sgb_flag)
     m->cart_cgb = cgb_flag != 0;
     m->cart_sgb = sgb_flag != 0;
     switch (m->forced_mode) {
-        case GB_MODE_DMG: m->active_mode = GB_MODE_DMG; break;
+        case GB_MODE_DMG:
+            m->active_mode = GB_MODE_DMG;
+            m->cart_cgb = false;
+            m->cart_sgb = false;
+            break;
         case GB_MODE_CGB: m->active_mode = GB_MODE_CGB; break;
         case GB_MODE_SGB: m->active_mode = GB_MODE_SGB; break;
         case GB_MODE_AUTO:
@@ -97,7 +101,6 @@ static void resolve_model(mem_t *m, u8 cgb_flag, u8 sgb_flag)
     m->cgb = m->active_mode == GB_MODE_CGB;
     m->sgb = m->active_mode == GB_MODE_SGB;
 }
-
 static u16 rd16le(const u8 *p)
 {
     return (u16)p[0] | ((u16)p[1] << 8);
